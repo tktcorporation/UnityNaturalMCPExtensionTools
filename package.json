@@ -1,0 +1,9 @@
+{
+  "name": "com.sack-kazu.unity-natural-mcp-extension-tools",
+  "version": "0.1.0",
+  "displayName": "Unity Natural MCP Extension Tools",
+  "description": "Extension tools for Unity Natural MCP",
+   "author": {
+    "name": "sack-kazu"
+  }
+}

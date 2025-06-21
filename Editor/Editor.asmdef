@@ -1,0 +1,19 @@
+{
+    "name": "CustomMcpTools.Editor",
+    "rootNamespace": "",
+    "references": [
+        "GUID:d88e5d70d19f1544bb676d4cf485bdc2",
+        "UniTask"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
