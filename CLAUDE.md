@@ -1,22 +1,22 @@
 # Unity Natural MCP Extension Tools
 
-This package provides custom MCP (Model Context Protocol) tools that extend Unity Natural MCP server capabilities, enabling comprehensive automation of Unity Editor operations.
+This package provides unified custom MCP (Model Context Protocol) tools that extend Unity Natural MCP server capabilities, enabling comprehensive automation of Unity Editor operations with consolidated functionality.
 
 ## パッケージ概要
 
-Unity Natural MCP サーバーの機能を拡張し、Unityエディタ操作の包括的な自動化を実現するカスタムMCPツール群です。
+Unity Natural MCP サーバーの機能を拡張し、Unityエディタ操作の包括的な自動化を実現する統合型カスタムMCPツール群です。バージョン0.2.0より、関連機能を統合し、より効率的なAPIを提供します。
 
-## ツール構成
+## ツール構成（v0.2.0 - 統合版）
 
 ### 実装済みツール
 
-| ツール名 | 責務 | 主要メソッド |
-|---------|------|-------------|
-| **McpSceneObjectTool** | シーンオブジェクト基本操作 | AddEmptyGameObject, AddPrimitiveToScene, DuplicateGameObject, DeleteObject, SetParentChild, SetTransformProperties |
-| **McpMaterialTool** | マテリアル作成・設定・割り当て | CreateMaterial, SetMaterialColor, SetMaterialFloat, SetMaterialEmission, SetMaterialShader, ListMaterials, AssignMaterialToRenderer |
-| **McpComponentPropertyTool** | コンポーネント詳細プロパティ設定 | SetRendererProperties, SetColliderProperties, SetAudioSourceProperties, AddComponentToObject, GetObjectInfo |
-| **McpParticleTool** | パーティクルシステム操作 | CreateParticleSystem, SetParticleSystemMain, SetParticleSystemShape, SetParticleSystemEmission, SetParticleSystemVelocity, PlayParticleSystem, StopParticleSystem |
-| **McpAssetTool** | アセット・Prefab・フォルダ管理 | CreateFolder, CreatePrefabFromGameObject, InstantiatePrefab, ListPrefabs, DeleteAsset, RefreshAssets |
+| ツール名 | 責務 | 主要メソッド | メソッド数 |
+|---------|------|-------------|-----------|
+| **McpUnifiedObjectTool** | オブジェクト作成・操作・プロパティ設定 | CreateObject, ManipulateObject, ConfigureComponent, GetObjectInfo, ListSceneObjects | 5 |
+| **McpUnifiedAssetTool** | マテリアル・アセット・フォルダ管理 | ManageMaterial, AssignMaterialToRenderer, ListMaterials, ManageAsset, ListPrefabs | 5 |
+| **McpUnifiedEffectTool** | パーティクルシステム管理 | ConfigureParticleSystem, ControlParticleSystem | 2 |
+
+**統合結果**: 31個のメソッド → 12個のメソッド（約61%削減）
 
 ### ディレクトリ構造
 
@@ -82,43 +82,9 @@ public class McpXxxToolBuilder : McpBuilderScriptableObject
 }
 ```
 
-## 使用方法
+## セットアップ
 
-### 1. パッケージのインストール
-
-Unity Package Manager を使用してこのパッケージをインストールします。
-
-### 2. ツールの自動登録
-
-Unity Natural MCP サーバー起動時に、Runtime フォルダ内の ScriptableObject が自動的に読み込まれ、対応するツールがMCPサーバーに登録されます。
-
-### 3. MCPツールの使用例
-
-```python
-# オブジェクト作成
-await mcp__unity-natural-mcp__AddPrimitiveToScene(
-    primitiveType="Cube",
-    objectName="MyCube",
-    position=[0, 1, 0]
-)
-
-# マテリアル作成と適用
-await mcp__unity-natural-mcp__CreateMaterial(
-    materialName="MyMaterial",
-    shaderName="Universal Render Pipeline/Lit"
-)
-
-await mcp__unity-natural-mcp__SetMaterialColor(
-    materialName="MyMaterial",
-    propertyName="_BaseColor",
-    colorValues=[1, 0, 0, 1]  # 赤色
-)
-
-await mcp__unity-natural-mcp__AssignMaterialToRenderer(
-    objectName="MyCube",
-    materialName="MyMaterial"
-)
-```
+Unity Package Manager を使用してこのパッケージをインストールします。Unity Natural MCP サーバー起動時に、Runtime フォルダ内の ScriptableObject が自動的に読み込まれ、対応するツールがMCPサーバーに登録されます。
 
 ## 技術的詳細
 

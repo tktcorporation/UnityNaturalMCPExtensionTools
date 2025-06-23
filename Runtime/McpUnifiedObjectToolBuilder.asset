@@ -9,6 +9,6 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d0e3acb29f55baf44876d3736e0084a3, type: 3}
-  m_Name: McpAssetToolBuilder
+  m_Script: {fileID: 11500000, guid: 9c0496db6fd1d464b9aa6af63697f602, type: 3}
+  m_Name: McpUnifiedObjectToolBuilder
   m_EditorClassIdentifier: 

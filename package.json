@@ -1,9 +1,12 @@
 {
   "name": "com.sack-kazu.unity-natural-mcp-extension-tools",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "displayName": "Unity Natural MCP Extension Tools",
-  "description": "Extension tools for Unity Natural MCP",
-   "author": {
+  "description": "Unified extension tools for Unity Natural MCP with consolidated functionality",
+  "author": {
     "name": "sack-kazu"
+  },
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
   }
 }

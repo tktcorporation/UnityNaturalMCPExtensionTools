@@ -52,12 +52,10 @@ This is an extension of [Unity Natural MCP](https://github.com/notargs/UnityNatu
 
 | Category | Tools | Methods |
 |----------|-------|---------|
-| Scene Objects | McpSceneObjectTool | 6 methods |
-| Materials | McpMaterialTool | 7 methods |
-| Components | McpComponentPropertyTool | 5 methods |
-| Particles | McpParticleTool | 7 methods |
-| Assets | McpAssetTool | 6 methods |
-| **Total** | **5 Tools** | **31 Methods** |
+| Object Operations | McpUnifiedObjectTool | 5 methods |
+| Asset & Material Management | McpUnifiedAssetTool | 5 methods |
+| Effect Systems | McpUnifiedEffectTool | 2 methods |
+| **Total** | **3 Tools** | **12 Methods** |
 
 ## Requirements
 
