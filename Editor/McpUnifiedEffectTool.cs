@@ -55,6 +55,9 @@ namespace Editor.McpTools
                     var main = particleSystem.main;
                     main.playOnAwake = false;
                     main.loop = false;
+                    
+                    // Assign appropriate material based on particle system type
+                    AssignDefaultMaterial(particleSystem);
                 }
                 else if (particleSystem == null)
                 {
@@ -322,6 +325,67 @@ namespace Editor.McpTools
 
             // Then check children
             return gameObject.GetComponentInChildren<ParticleSystem>();
+        }
+
+        private void AssignDefaultMaterial(ParticleSystem particleSystem)
+        {
+            try
+            {
+                var renderer = particleSystem.GetComponent<ParticleSystemRenderer>();
+                if (renderer == null)
+                    return;
+
+                // Check if material is already assigned
+                if (renderer.sharedMaterial != null && renderer.sharedMaterial.name != "Default-Material")
+                    return;
+
+                // Try to find appropriate default materials in the project
+                Material defaultMaterial = null;
+
+                // First, try to find a specific particle material
+                var particleMaterialGUIDs = AssetDatabase.FindAssets("t:Material Particle", new[] { "Assets" });
+                if (particleMaterialGUIDs.Length > 0)
+                {
+                    var path = AssetDatabase.GUIDToAssetPath(particleMaterialGUIDs[0]);
+                    defaultMaterial = AssetDatabase.LoadAssetAtPath<Material>(path);
+                }
+
+                // If no particle material found, try Default-Particle material
+                if (defaultMaterial == null)
+                {
+                    defaultMaterial = AssetDatabase.GetBuiltinExtraResource<Material>("Default-Particle.mat");
+                }
+
+                // If still no material, try Sprites-Default material which works well for particles
+                if (defaultMaterial == null)
+                {
+                    defaultMaterial = AssetDatabase.GetBuiltinExtraResource<Material>("Sprites-Default.mat");
+                }
+
+                // As a last resort, create a simple unlit material
+                if (defaultMaterial == null)
+                {
+                    defaultMaterial = new Material(Shader.Find("Sprites/Default"));
+                    defaultMaterial.name = "Particle Default Material";
+                    
+                    // Save it as an asset
+                    if (!AssetDatabase.IsValidFolder("Assets/Materials"))
+                    {
+                        AssetDatabase.CreateFolder("Assets", "Materials");
+                    }
+                    AssetDatabase.CreateAsset(defaultMaterial, "Assets/Materials/ParticleDefaultMaterial.mat");
+                }
+
+                if (defaultMaterial != null)
+                {
+                    renderer.sharedMaterial = defaultMaterial;
+                    EditorUtility.SetDirty(renderer);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"Failed to assign default material to particle system: {e.Message}");
+            }
         }
     }
 }
