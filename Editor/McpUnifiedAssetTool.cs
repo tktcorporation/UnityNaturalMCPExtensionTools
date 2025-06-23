@@ -201,12 +201,12 @@ namespace Editor.McpTools
                 if (material == null)
                     return $"Error: Material '{materialName}' not found";
 
-                if (materialIndex < 0 || materialIndex >= renderer.materials.Length)
-                    return $"Error: Material index {materialIndex} is out of range. GameObject has {renderer.materials.Length} material slots";
+                if (materialIndex < 0 || materialIndex >= renderer.sharedMaterials.Length)
+                    return $"Error: Material index {materialIndex} is out of range. GameObject has {renderer.sharedMaterials.Length} material slots";
 
-                var materials = renderer.materials;
+                var materials = renderer.sharedMaterials;
                 materials[materialIndex] = material;
-                renderer.materials = materials;
+                renderer.sharedMaterials = materials;
 
                 EditorUtility.SetDirty(renderer);
 
