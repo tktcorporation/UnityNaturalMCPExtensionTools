@@ -74,12 +74,11 @@ namespace Editor.McpTools
                     return "エラー: Prefab編集モードが開いていません";
                 }
 
-                // 変更があるか確認
-                // PrefabStageでは直接的な変更検出は困難なため、保存を試行
-                // if (!prefabStage.IsContentModified())
-                // {
-                //     return "変更はありません";
-                // }
+                // 変更があるか確認 - scene.isDirtyを使用（公開API）
+                if (!prefabStage.scene.isDirty)
+                {
+                    return "変更はありません";
+                }
 
                 // 変更を保存
                 var assetPath = prefabStage.assetPath;
@@ -93,8 +92,9 @@ namespace Editor.McpTools
                     PrefabUtility.SaveAsPrefabAsset(root, assetPath);
                     success = true;
                 }
-                catch
+                catch (Exception e)
                 {
+                    Debug.LogError($"Error saving prefab asset: {e.Message}\n{e.StackTrace}");
                     success = false;
                 }
 
@@ -171,7 +171,7 @@ namespace Editor.McpTools
 
                 var root = prefabStage.prefabContentsRoot;
                 var assetPath = prefabStage.assetPath;
-                var isModified = false; // PrefabStageでは変更検出が複雑なため、falseに設定
+                var isModified = prefabStage.scene.isDirty; // PrefabStageの正しい変更検出（公開API）
 
                 var status = $"編集中のPrefab: '{assetPath}'\n";
                 status += $"ルートオブジェクト: '{root.name}'\n";
