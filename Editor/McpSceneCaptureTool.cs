@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.IO;
+using System.Text;
 using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
 using ModelContextProtocol.Server;
@@ -81,7 +82,7 @@ namespace Editor.McpTools
 
                     // Create Texture2D and read pixels
                     RenderTexture.active = renderTexture;
-                    var texture2D = new Texture2D(width, height, TextureFormat.RGB24, false);
+                    var texture2D = new Texture2D(width, height, TextureFormat.RGBA32, false);
                     texture2D.ReadPixels(new Rect(0, 0, width, height), 0, 0);
                     texture2D.Apply();
 
@@ -142,14 +143,14 @@ namespace Editor.McpTools
                 if (files.Length == 0)
                     return "No PNG files found in SceneCapture folder.";
 
-                var fileList = "Captured screenshots:\n";
+                var fileListBuilder = new StringBuilder("Captured screenshots:\n");
                 foreach (var file in files)
                 {
                     var fileInfo = new FileInfo(file);
-                    fileList += $"- {fileInfo.Name} (Size: {fileInfo.Length / 1024}KB, Modified: {fileInfo.LastWriteTime})\n";
+                    fileListBuilder.AppendLine($"- {fileInfo.Name} (Size: {fileInfo.Length / 1024}KB, Modified: {fileInfo.LastWriteTime})");
                 }
 
-                return fileList;
+                return fileListBuilder.ToString();
             }
             catch (Exception e)
             {
