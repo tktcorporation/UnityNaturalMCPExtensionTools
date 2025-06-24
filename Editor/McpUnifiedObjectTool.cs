@@ -7,6 +7,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEditor.SceneManagement;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Linq;
 using Newtonsoft.Json;
 
@@ -18,6 +19,7 @@ namespace Editor.McpTools
     [McpServerToolType, Description("Unified object creation and manipulation tools for Unity")]
     internal sealed class McpUnifiedObjectTool
     {
+        private static readonly ConcurrentDictionary<string, Type> _typeCache = new ConcurrentDictionary<string, Type>();
         [McpServerTool, Description("Create objects in the scene (Primitive, Empty GameObject, or Prefab instance)")]
         public async ValueTask<string> CreateObject(
             [Description("Type of object to create: 'primitive', 'empty', or 'prefab'")]
@@ -482,6 +484,10 @@ namespace Editor.McpTools
             if (string.IsNullOrEmpty(componentType))
                 return null;
 
+            // Check cache first
+            if (_typeCache.TryGetValue(componentType, out var cachedType))
+                return cachedType;
+
             // Normalize component name (handle case variations)
             var normalizedName = NormalizeComponentName(componentType);
             
@@ -511,7 +517,10 @@ namespace Editor.McpTools
                 var fullTypeName = $"UnityEngine.{normalizedName}, {assembly}";
                 var type = Type.GetType(fullTypeName);
                 if (type != null && IsValidComponentType(type))
+                {
+                    _typeCache.TryAdd(componentType, type);
                     return type;
+                }
             }
 
             // Try without UnityEngine prefix
@@ -520,7 +529,10 @@ namespace Editor.McpTools
                 var fullTypeName = $"{normalizedName}, {assembly}";
                 var type = Type.GetType(fullTypeName);
                 if (type != null && IsValidComponentType(type))
+                {
+                    _typeCache.TryAdd(componentType, type);
                     return type;
+                }
             }
 
             // Fallback: search all loaded assemblies
@@ -535,6 +547,8 @@ namespace Editor.McpTools
                              type.Name.Equals(componentType, StringComparison.OrdinalIgnoreCase)) &&
                             IsValidComponentType(type))
                         {
+                            // Cache the result before returning
+                            _typeCache.TryAdd(componentType, type);
                             return type;
                         }
                     }
@@ -582,12 +596,6 @@ namespace Editor.McpTools
             if (aliases.TryGetValue(componentType, out var normalized))
                 return normalized;
 
-            // Ensure proper casing for known Unity components
-            if (componentType.Equals("rigidbody", StringComparison.OrdinalIgnoreCase))
-                return "Rigidbody";
-            if (componentType.Equals("boxcollider", StringComparison.OrdinalIgnoreCase))
-                return "BoxCollider";
-            
             // Default: capitalize first letter
             if (componentType.Length > 0)
                 return char.ToUpper(componentType[0]) + componentType.Substring(1);
@@ -613,8 +621,11 @@ namespace Editor.McpTools
                 return false;
 
             // Must have parameterless constructor or be Unity component
-            if (type.GetConstructor(Type.EmptyTypes) == null && !type.Namespace?.StartsWith("UnityEngine") == true)
-                return false;
+            if (type.GetConstructor(Type.EmptyTypes) == null)
+            {
+                if (type.Namespace == null || !type.Namespace.StartsWith("UnityEngine"))
+                    return false;
+            }
 
             return true;
         }
