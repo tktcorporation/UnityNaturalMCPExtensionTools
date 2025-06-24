@@ -7,6 +7,8 @@ using UnityEditor;
 using UnityEngine;
 using UnityEditor.SceneManagement;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
+using System.Linq;
 using Newtonsoft.Json;
 
 namespace Editor.McpTools
@@ -17,6 +19,7 @@ namespace Editor.McpTools
     [McpServerToolType, Description("Unified object creation and manipulation tools for Unity")]
     internal sealed class McpUnifiedObjectTool
     {
+        private static readonly ConcurrentDictionary<string, Type> _typeCache = new ConcurrentDictionary<string, Type>();
         [McpServerTool, Description("Create objects in the scene (Primitive, Empty GameObject, or Prefab instance)")]
         public async ValueTask<string> CreateObject(
             [Description("Type of object to create: 'primitive', 'empty', or 'prefab'")]
@@ -243,21 +246,34 @@ namespace Editor.McpTools
 
                 UnityEngine.Component component = null;
                 
-                // Try to find existing component
-                var compType = Type.GetType($"UnityEngine.{componentType}, UnityEngine") ??
-                              Type.GetType($"UnityEngine.{componentType}, UnityEngine.CoreModule") ??
-                              Type.GetType(componentType);
+                // Resolve component type using enhanced method
+                var compType = ResolveComponentType(componentType);
                 
                 if (compType == null)
-                    return $"Error: Component type '{componentType}' not found";
+                {
+                    // Try to suggest similar component names
+                    var suggestions = GetComponentSuggestions(componentType);
+                    var suggestionText = suggestions.Any() ? $" Did you mean: {string.Join(", ", suggestions)}?" : "";
+                    return $"Error: Component type '{componentType}' not found.{suggestionText}";
+                }
                 
+                // Check if component already exists
                 component = gameObject.GetComponent(compType);
+                bool wasAdded = false;
                 
                 // Add component if it doesn't exist
                 if (component == null)
                 {
-                    component = gameObject.AddComponent(compType);
-                    Undo.RegisterCreatedObjectUndo(component, $"Add {componentType}");
+                    try
+                    {
+                        component = gameObject.AddComponent(compType);
+                        Undo.RegisterCreatedObjectUndo(component, $"Add {componentType}");
+                        wasAdded = true;
+                    }
+                    catch (Exception e)
+                    {
+                        return $"Error: Failed to add component '{componentType}': {e.Message}";
+                    }
                 }
 
                 // Apply properties if provided
@@ -276,19 +292,21 @@ namespace Editor.McpTools
 
                         EditorUtility.SetDirty(gameObject);
                         
+                        var actionText = wasAdded ? "Added" : "Configured";
                         return changes.Count > 0
-                            ? $"Successfully configured {componentType} on '{objectName}': {string.Join(", ", changes)}"
-                            : $"Added {componentType} to '{objectName}' but no properties were set";
+                            ? $"Successfully {actionText.ToLower()} {compType.Name} on '{objectName}': {string.Join(", ", changes)}"
+                            : $"{actionText} {compType.Name} to '{objectName}' but no properties were set";
                     }
                     catch (JsonException)
                     {
-                        return $"Error: Invalid JSON format for properties";
+                        return $"Error: Invalid JSON format for properties. Expected format: {{\"propertyName\": value}}";
                     }
                 }
                 else
                 {
                     EditorUtility.SetDirty(gameObject);
-                    return $"Successfully added {componentType} to '{objectName}'";
+                    var actionText = wasAdded ? "added" : "found existing";
+                    return $"Successfully {actionText} {compType.Name} on '{objectName}'";
                 }
             }
             catch (Exception e)
@@ -403,6 +421,213 @@ namespace Editor.McpTools
             }
             
             return null;
+        }
+
+        private List<string> GetComponentSuggestions(string componentType)
+        {
+            var suggestions = new List<string>();
+            var lowerInput = componentType.ToLowerInvariant();
+            
+            // Common Unity components for suggestions
+            var commonComponents = new[]
+            {
+                "Rigidbody", "BoxCollider", "SphereCollider", "CapsuleCollider", "MeshCollider",
+                "AudioSource", "Light", "Camera", "MeshRenderer", "MeshFilter", "Transform",
+                "Animator", "Animation", "Rigidbody2D", "BoxCollider2D", "CircleCollider2D",
+                "ParticleSystem", "LineRenderer", "TrailRenderer", "SkinnedMeshRenderer",
+                "CharacterController", "NavMeshAgent", "AudioListener", "Canvas", "Image",
+                "Text", "Button", "Slider", "Toggle", "InputField", "Dropdown", "ScrollRect"
+            };
+            
+            // Find components that start with the same letter or contain the input
+            foreach (var comp in commonComponents)
+            {
+                var lowerComp = comp.ToLowerInvariant();
+                if (lowerComp.StartsWith(lowerInput) || 
+                    lowerComp.Contains(lowerInput) || 
+                    LevenshteinDistance(lowerInput, lowerComp) <= 2)
+                {
+                    suggestions.Add(comp);
+                }
+            }
+            
+            return suggestions.Take(3).ToList(); // Limit to 3 suggestions
+        }
+        
+        private int LevenshteinDistance(string s1, string s2)
+        {
+            if (string.IsNullOrEmpty(s1)) return s2?.Length ?? 0;
+            if (string.IsNullOrEmpty(s2)) return s1.Length;
+            
+            var matrix = new int[s1.Length + 1, s2.Length + 1];
+            
+            for (int i = 0; i <= s1.Length; i++) matrix[i, 0] = i;
+            for (int j = 0; j <= s2.Length; j++) matrix[0, j] = j;
+            
+            for (int i = 1; i <= s1.Length; i++)
+            {
+                for (int j = 1; j <= s2.Length; j++)
+                {
+                    int cost = s1[i - 1] == s2[j - 1] ? 0 : 1;
+                    matrix[i, j] = Math.Min(Math.Min(
+                        matrix[i - 1, j] + 1,      // deletion
+                        matrix[i, j - 1] + 1),     // insertion
+                        matrix[i - 1, j - 1] + cost); // substitution
+                }
+            }
+            
+            return matrix[s1.Length, s2.Length];
+        }
+
+        private Type ResolveComponentType(string componentType)
+        {
+            if (string.IsNullOrEmpty(componentType))
+                return null;
+
+            // Check cache first
+            if (_typeCache.TryGetValue(componentType, out var cachedType))
+                return cachedType;
+
+            // Normalize component name (handle case variations)
+            var normalizedName = NormalizeComponentName(componentType);
+            
+            // Common Unity assemblies to search
+            var assembliesToSearch = new[]
+            {
+                "UnityEngine",
+                "UnityEngine.CoreModule",
+                "UnityEngine.PhysicsModule", 
+                "UnityEngine.Physics2DModule",
+                "UnityEngine.AudioModule",
+                "UnityEngine.AnimationModule",
+                "UnityEngine.ParticleSystemModule",
+                "UnityEngine.UIModule",
+                "UnityEngine.TextRenderingModule",
+                "UnityEngine.InputLegacyModule",
+                "UnityEngine.AIModule",
+                "UnityEngine.TerrainModule",
+                "UnityEngine.VideoModule",
+                "UnityEngine.UnityWebRequestModule",
+                "UnityEngine.XRModule"
+            };
+
+            // Try exact type name first
+            foreach (var assembly in assembliesToSearch)
+            {
+                var fullTypeName = $"UnityEngine.{normalizedName}, {assembly}";
+                var type = Type.GetType(fullTypeName);
+                if (type != null && IsValidComponentType(type))
+                {
+                    _typeCache.TryAdd(componentType, type);
+                    return type;
+                }
+            }
+
+            // Try without UnityEngine prefix
+            foreach (var assembly in assembliesToSearch)
+            {
+                var fullTypeName = $"{normalizedName}, {assembly}";
+                var type = Type.GetType(fullTypeName);
+                if (type != null && IsValidComponentType(type))
+                {
+                    _typeCache.TryAdd(componentType, type);
+                    return type;
+                }
+            }
+
+            // Fallback: search all loaded assemblies
+            foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
+            {
+                try
+                {
+                    var types = assembly.GetTypes();
+                    foreach (var type in types)
+                    {
+                        if ((type.Name.Equals(normalizedName, StringComparison.OrdinalIgnoreCase) ||
+                             type.Name.Equals(componentType, StringComparison.OrdinalIgnoreCase)) &&
+                            IsValidComponentType(type))
+                        {
+                            // Cache the result before returning
+                            _typeCache.TryAdd(componentType, type);
+                            return type;
+                        }
+                    }
+                }
+                catch
+                {
+                    // Skip assemblies that can't be loaded
+                }
+            }
+
+            return null;
+        }
+
+        private string NormalizeComponentName(string componentType)
+        {
+            // Handle common aliases and variations
+            var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                {"rigidbody", "Rigidbody"},
+                {"rb", "Rigidbody"},
+                {"collider", "BoxCollider"},
+                {"boxcollider", "BoxCollider"},
+                {"spherecollider", "SphereCollider"},
+                {"capsulecollider", "CapsuleCollider"},
+                {"meshcollider", "MeshCollider"},
+                {"audiosource", "AudioSource"},
+                {"audio", "AudioSource"},
+                {"light", "Light"},
+                {"camera", "Camera"},
+                {"meshrenderer", "MeshRenderer"},
+                {"renderer", "MeshRenderer"},
+                {"meshfilter", "MeshFilter"},
+                {"transform", "Transform"},
+                {"animator", "Animator"},
+                {"animation", "Animation"},
+                {"rigidbody2d", "Rigidbody2D"},
+                {"rb2d", "Rigidbody2D"},
+                {"collider2d", "BoxCollider2D"},
+                {"boxcollider2d", "BoxCollider2D"},
+                {"circlecollider2d", "CircleCollider2D"},
+                {"particlesystem", "ParticleSystem"},
+                {"particles", "ParticleSystem"}
+            };
+
+            if (aliases.TryGetValue(componentType, out var normalized))
+                return normalized;
+
+            // Default: capitalize first letter
+            if (componentType.Length > 0)
+                return char.ToUpper(componentType[0]) + componentType.Substring(1);
+            
+            return componentType;
+        }
+
+        private bool IsValidComponentType(Type type)
+        {
+            if (type == null)
+                return false;
+
+            // Must inherit from Component
+            if (!typeof(UnityEngine.Component).IsAssignableFrom(type))
+                return false;
+
+            // Must not be abstract
+            if (type.IsAbstract)
+                return false;
+
+            // Must not be interface
+            if (type.IsInterface)
+                return false;
+
+            // Must have parameterless constructor or be Unity component
+            if (type.GetConstructor(Type.EmptyTypes) == null)
+            {
+                if (type.Namespace == null || !type.Namespace.StartsWith("UnityEngine"))
+                    return false;
+            }
+
+            return true;
         }
 
         private bool SetComponentProperty(UnityEngine.Component component, string propertyName, object value)
