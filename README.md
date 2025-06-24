@@ -24,6 +24,12 @@ This is an extension of [Unity Natural MCP](https://github.com/notargs/UnityNatu
 - Assign materials to renderers
 - List and filter materials
 
+### 📷 Scene Capture
+- Capture Unity scene views to PNG images
+- Custom camera positioning and resolution settings
+- Automatic timestamp-based file naming
+- List and manage captured screenshots
+
 ### 🔧 Component Properties
 - Configure renderer properties
 - Set up colliders (Box, Sphere, Capsule)
@@ -55,7 +61,8 @@ This is an extension of [Unity Natural MCP](https://github.com/notargs/UnityNatu
 | Object Operations | McpUnifiedObjectTool | 5 methods |
 | Asset & Material Management | McpUnifiedAssetTool | 5 methods |
 | Effect Systems | McpUnifiedEffectTool | 2 methods |
-| **Total** | **3 Tools** | **12 Methods** |
+| Scene Capture | McpSceneCaptureTool | 2 methods |
+| **Total** | **4 Tools** | **14 Methods** |
 
 ## Requirements
 
