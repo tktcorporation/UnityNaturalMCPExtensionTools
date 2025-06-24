@@ -4,9 +4,9 @@ This package provides unified custom MCP (Model Context Protocol) tools that ext
 
 ## パッケージ概要
 
-Unity Natural MCP サーバーの機能を拡張し、Unityエディタ操作の包括的な自動化を実現する統合型カスタムMCPツール群です。バージョン0.3.0では、シーンキャプチャ機能を追加し、より包括的な開発支援ツールを提供します。
+Unity Natural MCP サーバーの機能を拡張し、Unityエディタ操作の包括的な自動化を実現する統合型カスタムMCPツール群です。バージョン0.4.0では、Prefab編集モード管理機能を追加し、より包括的な開発支援ツールを提供します。
 
-## ツール構成（v0.3.0 - シーンキャプチャ追加版）
+## ツール構成（v0.4.0 - Prefab Edit Tool 追加版）
 
 ### 実装済みツール
 
@@ -16,8 +16,9 @@ Unity Natural MCP サーバーの機能を拡張し、Unityエディタ操作の
 | **McpUnifiedAssetTool** | マテリアル・アセット・フォルダ管理 | ManageMaterial, AssignMaterialToRenderer, ListMaterials, ManageAsset, ListPrefabs | 5 |
 | **McpUnifiedEffectTool** | パーティクルシステム管理 | ConfigureParticleSystem, ControlParticleSystem | 2 |
 | **McpSceneCaptureTool** | シーンスクリーンショット機能 | CaptureScene, ListCapturedScreenshots | 2 |
+| **McpPrefabEditTool** | Prefab編集モード管理 | OpenPrefabMode, SavePrefabChanges, ExitPrefabMode, GetPrefabEditStatus | 4 |
 
-**統合結果**: 31個のメソッド → 14個のメソッド（約55%削減）
+**統合結果**: 31個のメソッド → 18個のメソッド（約42%削減）
 
 ### ディレクトリ構造
 
@@ -32,12 +33,15 @@ com.sack-kazu.unity-natural-mcp-extension-tools/
 │   ├── McpUnifiedEffectTool.cs # 統合エフェクトシステム
 │   ├── McpUnifiedEffectToolBuilder.cs
 │   ├── McpSceneCaptureTool.cs  # シーンキャプチャ機能
-│   └── McpSceneCaptureToolBuilder.cs
+│   ├── McpSceneCaptureToolBuilder.cs
+│   ├── McpPrefabEditTool.cs    # Prefab編集モード管理
+│   └── McpPrefabEditToolBuilder.cs
 ├── Runtime/                    # ScriptableObjectアセット
 │   ├── McpUnifiedObjectToolBuilder.asset
 │   ├── McpUnifiedAssetToolBuilder.asset
 │   ├── McpUnifiedEffectToolBuilder.asset
-│   └── McpSceneCaptureToolBuilder.asset
+│   ├── McpSceneCaptureToolBuilder.asset
+│   └── McpPrefabEditToolBuilder.asset
 └── package.json               # パッケージマニフェスト
 ```
 

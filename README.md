@@ -48,6 +48,12 @@ This is an extension of [Unity Natural MCP](https://github.com/notargs/UnityNatu
 - Instantiate prefabs
 - List and delete assets
 
+### 🔧 Prefab Editing
+- Open prefabs in edit mode
+- Save prefab changes
+- Exit prefab edit mode
+- Check prefab edit status
+
 ## Installation
 
 1. Ensure you have [Unity Natural MCP](https://github.com/notargs/UnityNaturalMCP) installed and configured
@@ -62,7 +68,8 @@ This is an extension of [Unity Natural MCP](https://github.com/notargs/UnityNatu
 | Asset & Material Management | McpUnifiedAssetTool | 5 methods |
 | Effect Systems | McpUnifiedEffectTool | 2 methods |
 | Scene Capture | McpSceneCaptureTool | 2 methods |
-| **Total** | **4 Tools** | **14 Methods** |
+| Prefab Editing | McpPrefabEditTool | 4 methods |
+| **Total** | **5 Tools** | **18 Methods** |
 
 ## Requirements
 
