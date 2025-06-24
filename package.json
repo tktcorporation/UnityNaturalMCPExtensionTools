@@ -1,8 +1,8 @@
 {
   "name": "com.sack-kazu.unity-natural-mcp-extension-tools",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "displayName": "Unity Natural MCP Extension Tools",
-  "description": "Unified extension tools for Unity Natural MCP with consolidated functionality",
+  "description": "Unified extension tools for Unity Natural MCP with scene capture functionality",
   "author": {
     "name": "sack-kazu"
   },

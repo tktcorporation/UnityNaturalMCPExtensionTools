@@ -4,9 +4,9 @@ This package provides unified custom MCP (Model Context Protocol) tools that ext
 
 ## パッケージ概要
 
-Unity Natural MCP サーバーの機能を拡張し、Unityエディタ操作の包括的な自動化を実現する統合型カスタムMCPツール群です。バージョン0.2.0より、関連機能を統合し、より効率的なAPIを提供します。
+Unity Natural MCP サーバーの機能を拡張し、Unityエディタ操作の包括的な自動化を実現する統合型カスタムMCPツール群です。バージョン0.3.0では、シーンキャプチャ機能を追加し、より包括的な開発支援ツールを提供します。
 
-## ツール構成（v0.2.0 - 統合版）
+## ツール構成（v0.3.0 - シーンキャプチャ追加版）
 
 ### 実装済みツール
 
@@ -15,8 +15,9 @@ Unity Natural MCP サーバーの機能を拡張し、Unityエディタ操作の
 | **McpUnifiedObjectTool** | オブジェクト作成・操作・プロパティ設定 | CreateObject, ManipulateObject, ConfigureComponent, GetObjectInfo, ListSceneObjects | 5 |
 | **McpUnifiedAssetTool** | マテリアル・アセット・フォルダ管理 | ManageMaterial, AssignMaterialToRenderer, ListMaterials, ManageAsset, ListPrefabs | 5 |
 | **McpUnifiedEffectTool** | パーティクルシステム管理 | ConfigureParticleSystem, ControlParticleSystem | 2 |
+| **McpSceneCaptureTool** | シーンスクリーンショット機能 | CaptureScene, ListCapturedScreenshots | 2 |
 
-**統合結果**: 31個のメソッド → 12個のメソッド（約61%削減）
+**統合結果**: 31個のメソッド → 14個のメソッド（約55%削減）
 
 ### ディレクトリ構造
 
@@ -24,22 +25,19 @@ Unity Natural MCP サーバーの機能を拡張し、Unityエディタ操作の
 com.sack-kazu.unity-natural-mcp-extension-tools/
 ├── Editor/                     # MCPツール実装
 │   ├── Editor.asmdef          # エディタアセンブリ定義
-│   ├── McpSceneObjectTool.cs  # シーンオブジェクト操作
-│   ├── McpSceneObjectToolBuilder.cs
-│   ├── McpMaterialTool.cs     # マテリアル操作
-│   ├── McpMaterialToolBuilder.cs
-│   ├── McpComponentPropertyTool.cs  # コンポーネント設定
-│   ├── McpComponentPropertyToolBuilder.cs
-│   ├── McpParticleTool.cs     # パーティクルシステム
-│   ├── McpParticleToolBuilder.cs
-│   ├── McpAssetTool.cs        # アセット管理
-│   └── McpAssetToolBuilder.cs
+│   ├── McpUnifiedObjectTool.cs # 統合オブジェクト操作
+│   ├── McpUnifiedObjectToolBuilder.cs
+│   ├── McpUnifiedAssetTool.cs  # 統合アセット・マテリアル操作
+│   ├── McpUnifiedAssetToolBuilder.cs
+│   ├── McpUnifiedEffectTool.cs # 統合エフェクトシステム
+│   ├── McpUnifiedEffectToolBuilder.cs
+│   ├── McpSceneCaptureTool.cs  # シーンキャプチャ機能
+│   └── McpSceneCaptureToolBuilder.cs
 ├── Runtime/                    # ScriptableObjectアセット
-│   ├── McpSceneObjectToolBuilder.asset
-│   ├── McpMaterialToolBuilder.asset
-│   ├── McpComponentPropertyToolBuilder.asset
-│   ├── McpParticleToolBuilder.asset
-│   └── McpAssetToolBuilder.asset
+│   ├── McpUnifiedObjectToolBuilder.asset
+│   ├── McpUnifiedAssetToolBuilder.asset
+│   ├── McpUnifiedEffectToolBuilder.asset
+│   └── McpSceneCaptureToolBuilder.asset
 └── package.json               # パッケージマニフェスト
 ```
 
