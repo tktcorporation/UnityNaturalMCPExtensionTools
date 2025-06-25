@@ -2,6 +2,10 @@
 
 Custom MCP (Model Context Protocol) tools that extend [Unity Natural MCP](https://github.com/notargs/UnityNaturalMCP) server capabilities for comprehensive Unity Editor automation.
 
+**THIS IS SOMETHING I AM CURRENTLY WORKING ON FOR MY OWN USE, SO I CANNOT GUARANTEE THAT IT WILL WORK.**
+
+**これは自分のために制作中のもので、動作は保証できません**
+
 ## Overview
 
 This package provides a collection of custom MCP tools designed to enhance the Unity Natural MCP server with additional Unity Editor operation capabilities. It extends the base functionality provided by Unity Natural MCP to enable more comprehensive automation workflows.
