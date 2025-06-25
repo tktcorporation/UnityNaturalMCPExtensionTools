@@ -62,6 +62,11 @@ This is an extension of [Unity Natural MCP](https://github.com/notargs/UnityNatu
 
 1. Ensure you have [Unity Natural MCP](https://github.com/notargs/UnityNaturalMCP) installed and configured
 2. Add this package to your Unity project via Package Manager
+   
+  ```
+  https://github.com/sack-kazu/UnityNaturalMCPExtensionTools.git
+  ```
+
 3. The tools will be automatically registered when the MCP server starts
 
 ## Tool Categories
