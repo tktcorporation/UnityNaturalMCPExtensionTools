@@ -15,10 +15,10 @@ Unity Natural MCP サーバーの機能を拡張し、Unityエディタ操作の
 | **McpUnifiedObjectTool** | オブジェクト作成・操作・プロパティ設定 | CreateObject, ManipulateObject, ConfigureComponent, GetObjectInfo, ListSceneObjects | 5 |
 | **McpUnifiedAssetTool** | マテリアル・アセット・フォルダ管理 | ManageMaterial, AssignMaterialToRenderer, ListMaterials, ManageAsset, ListPrefabs | 5 |
 | **McpUnifiedEffectTool** | パーティクルシステム管理 | ConfigureParticleSystem, ControlParticleSystem | 2 |
-| **McpSceneCaptureTool** | シーンスクリーンショット機能 | CaptureScene, ListCapturedScreenshots | 2 |
+| **McpSceneCaptureTool** | シーンスクリーンショット機能 | CaptureScene, CaptureGameView, ListCapturedScreenshots | 3 |
 | **McpPrefabEditTool** | Prefab編集モード管理 | OpenPrefabMode, SavePrefabChanges, ExitPrefabMode, GetPrefabEditStatus | 4 |
 
-**統合結果**: 31個のメソッド → 18個のメソッド（約42%削減）
+**統合結果**: 31個のメソッド → 19個のメソッド（約39%削減）
 
 ### ディレクトリ構造
 

@@ -1,11 +1,13 @@
 using System;
 using System.ComponentModel;
 using System.IO;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
 using ModelContextProtocol.Server;
 using UnityEditor;
+using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -123,6 +125,104 @@ namespace Editor.McpTools
             {
                 Debug.LogError($"Failed to capture scene: {e}");
                 return $"Error: Failed to capture scene - {e.Message}";
+            }
+        }
+
+        [McpServerTool, Description("Capture Unity Game View and save as PNG")]
+        public async ValueTask<string> CaptureGameView(
+            [Description("Capture width in pixels (optional, uses Game View size if not specified)")]
+            int width = 0,
+            [Description("Capture height in pixels (optional, uses Game View size if not specified)")]
+            int height = 0,
+            [Description("Use actual Game View size (optional, default: true)")]
+            bool useGameViewSize = true)
+        {
+            try
+            {
+                await UniTask.SwitchToMainThread();
+
+                // Get the Game View window
+                var gameViewType = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.GameView");
+                if (gameViewType == null)
+                    return "Error: Could not find Game View type";
+
+                var gameView = EditorWindow.GetWindow(gameViewType, false, null, false);
+                if (gameView == null)
+                    return "Error: Could not get Game View window";
+
+                // Get window position and size
+                var windowPosition = gameView.position.position;
+                var windowWidth = (int)gameView.position.width;
+                var windowHeight = (int)gameView.position.height;
+
+                // Determine capture dimensions
+                int captureWidth = width;
+                int captureHeight = height;
+
+                if (useGameViewSize || width <= 0 || height <= 0)
+                {
+                    captureWidth = windowWidth;
+                    captureHeight = windowHeight;
+                }
+
+                // Capture the Game View pixels using InternalEditorUtility
+                Color[] pixels = InternalEditorUtility.ReadScreenPixel(windowPosition, windowWidth, windowHeight);
+
+                // Create texture from captured pixels
+                var capturedTexture = new Texture2D(windowWidth, windowHeight, TextureFormat.RGBA32, false);
+                capturedTexture.SetPixels(pixels);
+                capturedTexture.Apply();
+
+                // Resize if needed
+                Texture2D finalTexture = capturedTexture;
+                if (captureWidth != windowWidth || captureHeight != windowHeight)
+                {
+                    // Create a temporary render texture for resizing
+                    var tempRenderTexture = new RenderTexture(captureWidth, captureHeight, 24, RenderTextureFormat.ARGB32);
+                    tempRenderTexture.Create();
+
+                    // Blit to resize
+                    var previousActive = RenderTexture.active;
+                    RenderTexture.active = tempRenderTexture;
+                    Graphics.Blit(capturedTexture, tempRenderTexture);
+
+                    // Read resized pixels
+                    finalTexture = new Texture2D(captureWidth, captureHeight, TextureFormat.RGBA32, false);
+                    finalTexture.ReadPixels(new Rect(0, 0, captureWidth, captureHeight), 0, 0);
+                    finalTexture.Apply();
+
+                    RenderTexture.active = previousActive;
+
+                    // Cleanup temporary objects
+                    GameObject.DestroyImmediate(tempRenderTexture);
+                    GameObject.DestroyImmediate(capturedTexture);
+                }
+
+                // Create output directory if it doesn't exist
+                var projectPath = Path.GetDirectoryName(Application.dataPath);
+                var outputDirectory = Path.Combine(projectPath, "SceneCapture");
+                if (!Directory.Exists(outputDirectory))
+                    Directory.CreateDirectory(outputDirectory);
+
+                // Generate filename with timestamp
+                var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HHmmss");
+                var filename = $"gameview_{timestamp}.png";
+                var fullPath = Path.Combine(outputDirectory, filename);
+
+                // Save PNG
+                var pngData = finalTexture.EncodeToPNG();
+                File.WriteAllBytes(fullPath, pngData);
+
+                // Cleanup
+                GameObject.DestroyImmediate(finalTexture);
+
+                Debug.Log($"Game View captured successfully: {fullPath}");
+                return $"Game View captured successfully to: {fullPath} (Resolution: {captureWidth}x{captureHeight})";
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Failed to capture Game View: {e}");
+                return $"Error: Failed to capture Game View - {e.Message}";
             }
         }
 
