@@ -416,7 +416,9 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Name of the GameObject to inspect")]
             string objectName,
             [Description("Get info from Prefab mode context instead of scene (optional, default: false)")]
-            bool inPrefabMode = false)
+            bool inPrefabMode = false,
+            [Description("Include SerializeField null checks in component details (optional, default: false)")]
+            bool checkSerializeFields = false)
         {
             try
             {
@@ -450,7 +452,19 @@ namespace UnityNaturalMCPExtension.Editor
                 foreach (var component in gameObject.GetComponents<UnityEngine.Component>())
                 {
                     if (component != null)
+                    {
                         info.AppendLine($"  - {component.GetType().Name}");
+                        
+                        if (checkSerializeFields)
+                        {
+                            var fieldDetails = GetSerializeFieldDetails(component);
+                            if (!string.IsNullOrEmpty(fieldDetails))
+                            {
+                                info.AppendLine($"    SerializeFields:");
+                                info.AppendLine(fieldDetails);
+                            }
+                        }
+                    }
                 }
 
                 return info.ToString();
@@ -1130,6 +1144,69 @@ namespace UnityNaturalMCPExtension.Editor
             }
 
             return null;
+        }
+
+        private string GetSerializeFieldDetails(UnityEngine.Component component)
+        {
+            try
+            {
+                var type = component.GetType();
+                var fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Where(f => f.GetCustomAttribute<SerializeField>() != null || (f.IsPublic && f.GetCustomAttribute<System.NonSerializedAttribute>() == null))
+                    .ToArray();
+
+                if (fields.Length == 0)
+                    return null;
+
+                var details = new System.Text.StringBuilder();
+                
+                foreach (var field in fields)
+                {
+                    var fieldValue = field.GetValue(component);
+                    var isNull = fieldValue == null || (fieldValue is UnityEngine.Object unityObj && unityObj == null);
+                    var nullStatus = isNull ? "[NULL]" : "[SET]";
+                    var valueDisplay = isNull ? "null" : GetFieldValueDisplay(fieldValue);
+                    
+                    details.AppendLine($"      {field.Name} ({field.FieldType.Name}): {nullStatus} = {valueDisplay}");
+                }
+
+                return details.ToString();
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"Error getting SerializeField details for {component.GetType().Name}: {e.Message}");
+                return $"      Error reading SerializeFields: {e.Message}";
+            }
+        }
+
+        private string GetFieldValueDisplay(object value)
+        {
+            if (value == null)
+                return "null";
+
+            if (value is UnityEngine.Object unityObj)
+            {
+                if (unityObj == null)
+                    return "null (Unity Object)";
+                return $"'{unityObj.name}' ({unityObj.GetType().Name})";
+            }
+
+            if (value is string str)
+                return $"\"{str}\"";
+
+            if (value is Vector3 v3)
+                return $"({v3.x:F2}, {v3.y:F2}, {v3.z:F2})";
+
+            if (value is Color color)
+                return $"({color.r:F2}, {color.g:F2}, {color.b:F2}, {color.a:F2})";
+
+            if (value is bool || value.GetType().IsPrimitive)
+                return value.ToString();
+
+            if (value is System.Collections.ICollection collection)
+                return $"Array/List (Count: {collection.Count})";
+
+            return value.ToString();
         }
     }
 }
