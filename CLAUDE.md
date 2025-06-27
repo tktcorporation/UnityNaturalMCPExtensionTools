@@ -4,9 +4,9 @@ This package provides unified custom MCP (Model Context Protocol) tools that ext
 
 ## パッケージ概要
 
-Unity Natural MCP サーバーの機能を拡張し、Unityエディタ操作の包括的な自動化を実現する統合型カスタムMCPツール群です。バージョン0.4.0では、Prefab編集モード管理機能を追加し、より包括的な開発支援ツールを提供します。
+Unity Natural MCP サーバーの機能を拡張し、Unityエディタ操作の包括的な自動化を実現する統合型カスタムMCPツール群です。バージョン0.5.0では、Scene管理機能を追加し、より包括的な開発支援ツールを提供します。
 
-## ツール構成（v0.4.0 - Prefab Edit Tool 追加版）
+## ツール構成（v0.5.0 - Scene Management Tool 追加版）
 
 ### 実装済みツール
 
@@ -17,8 +17,9 @@ Unity Natural MCP サーバーの機能を拡張し、Unityエディタ操作の
 | **McpUnifiedEffectTool** | パーティクルシステム管理 | ConfigureParticleSystem, ControlParticleSystem | 2 |
 | **McpSceneCaptureTool** | シーンスクリーンショット機能 | CaptureScene, CaptureGameView, ListCapturedScreenshots | 3 |
 | **McpPrefabEditTool** | Prefab編集モード管理 | OpenPrefabMode, SavePrefabChanges, ExitPrefabMode, GetPrefabEditStatus | 4 |
+| **McpSceneManagementTool** | Scene作成・管理・操作 | CreateScene, SaveScene, LoadScene, ListScenes, GetActiveSceneInfo, CloseScene | 6 |
 
-**統合結果**: 31個のメソッド → 19個のメソッド（約39%削減）
+**統合結果**: 31個のメソッド → 25個のメソッド（約19%削減）
 
 ### ディレクトリ構造
 
@@ -35,13 +36,16 @@ com.sack-kazu.unity-natural-mcp-extension-tools/
 │   ├── McpSceneCaptureTool.cs  # シーンキャプチャ機能
 │   ├── McpSceneCaptureToolBuilder.cs
 │   ├── McpPrefabEditTool.cs    # Prefab編集モード管理
-│   └── McpPrefabEditToolBuilder.cs
+│   ├── McpPrefabEditToolBuilder.cs
+│   ├── McpSceneManagementTool.cs # Scene作成・管理機能
+│   └── McpSceneManagementToolBuilder.cs
 ├── Runtime/                    # ScriptableObjectアセット
 │   ├── McpUnifiedObjectToolBuilder.asset
 │   ├── McpUnifiedAssetToolBuilder.asset
 │   ├── McpUnifiedEffectToolBuilder.asset
 │   ├── McpSceneCaptureToolBuilder.asset
-│   └── McpPrefabEditToolBuilder.asset
+│   ├── McpPrefabEditToolBuilder.asset
+│   └── McpSceneManagementToolBuilder.asset
 └── package.json               # パッケージマニフェスト
 ```
 
