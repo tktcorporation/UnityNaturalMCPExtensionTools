@@ -6,6 +6,7 @@ using ModelContextProtocol.Server;
 using UnityEditor;
 using UnityEngine;
 using UnityEditor.SceneManagement;
+using UnityEditor.Experimental.SceneManagement;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Linq;
@@ -37,11 +38,21 @@ namespace UnityNaturalMCPExtesion.Editor
             [Description("Scale [x,y,z] (optional, not for prefabs)")]
             float[] scale = null,
             [Description("Parent object name (optional)")]
-            string parentName = null)
+            string parentName = null,
+            [Description("Create in Prefab mode context instead of scene (optional, default: false)")]
+            bool inPrefabMode = false)
         {
             try
             {
                 await UniTask.SwitchToMainThread();
+
+                // Check if we're in Prefab mode when requested
+                if (inPrefabMode)
+                {
+                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                    if (prefabStage == null)
+                        return "Error: Prefab mode is not active. Please open a prefab first.";
+                }
 
                 GameObject gameObject = null;
 
@@ -96,12 +107,23 @@ namespace UnityNaturalMCPExtesion.Editor
                 // Set parent
                 if (!string.IsNullOrEmpty(parentName))
                 {
-                    var parent = GameObject.Find(parentName);
+                    var parent = FindGameObjectInContext(parentName, inPrefabMode);
                     if (parent != null)
                         gameObject.transform.SetParent(parent.transform);
                 }
 
-                EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+                if (inPrefabMode)
+                {
+                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                    if (prefabStage != null)
+                    {
+                        EditorSceneManager.MarkSceneDirty(prefabStage.scene);
+                    }
+                }
+                else
+                {
+                    EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+                }
                 Undo.RegisterCreatedObjectUndo(gameObject, $"Create {type}");
 
                 var pos = gameObject.transform.position;
@@ -136,15 +158,25 @@ namespace UnityNaturalMCPExtesion.Editor
             [Description("For duplicate: Name for the duplicated object (optional)")]
             string newObjectName = null,
             [Description("For parent: Keep world position when parenting (optional, default: true)")]
-            bool worldPositionStays = true)
+            bool worldPositionStays = true,
+            [Description("Operate in Prefab mode context instead of scene (optional, default: false)")]
+            bool inPrefabMode = false)
         {
             try
             {
                 await UniTask.SwitchToMainThread();
 
-                var gameObject = GameObject.Find(objectName);
+                // Check if we're in Prefab mode when requested
+                if (inPrefabMode)
+                {
+                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                    if (prefabStage == null)
+                        return "Error: Prefab mode is not active. Please open a prefab first.";
+                }
+
+                var gameObject = FindGameObjectInContext(objectName, inPrefabMode);
                 if (gameObject == null)
-                    return $"Error: GameObject '{objectName}' not found";
+                    return $"Error: GameObject '{objectName}' not found{(inPrefabMode ? " in Prefab mode" : " in scene")}";
 
                 switch (operation?.ToLower())
                 {
@@ -178,9 +210,9 @@ namespace UnityNaturalMCPExtesion.Editor
                         Transform newParent = null;
                         if (!string.IsNullOrEmpty(parentName))
                         {
-                            var parentObj = GameObject.Find(parentName);
+                            var parentObj = FindGameObjectInContext(parentName, inPrefabMode);
                             if (parentObj == null)
-                                return $"Error: Parent GameObject '{parentName}' not found";
+                                return $"Error: Parent GameObject '{parentName}' not found{(inPrefabMode ? " in Prefab mode" : " in scene")}";
                             newParent = parentObj.transform;
                         }
 
@@ -213,7 +245,18 @@ namespace UnityNaturalMCPExtesion.Editor
 
                     case "delete":
                         Undo.DestroyObjectImmediate(gameObject);
-                        EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+                        if (inPrefabMode)
+                        {
+                            var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                            if (prefabStage != null)
+                            {
+                                EditorSceneManager.MarkSceneDirty(prefabStage.scene);
+                            }
+                        }
+                        else
+                        {
+                            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+                        }
                         return $"Successfully deleted GameObject '{objectName}'";
 
                     default:
@@ -234,15 +277,25 @@ namespace UnityNaturalMCPExtesion.Editor
             [Description("Component type (e.g., 'Rigidbody', 'BoxCollider', 'AudioSource', 'Renderer')")]
             string componentType,
             [Description("JSON string with component properties to set (optional)")]
-            string properties = null)
+            string properties = null,
+            [Description("Configure in Prefab mode context instead of scene (optional, default: false)")]
+            bool inPrefabMode = false)
         {
             try
             {
                 await UniTask.SwitchToMainThread();
 
-                var gameObject = GameObject.Find(objectName);
+                // Check if we're in Prefab mode when requested
+                if (inPrefabMode)
+                {
+                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                    if (prefabStage == null)
+                        return "Error: Prefab mode is not active. Please open a prefab first.";
+                }
+
+                var gameObject = FindGameObjectInContext(objectName, inPrefabMode);
                 if (gameObject == null)
-                    return $"Error: GameObject '{objectName}' not found";
+                    return $"Error: GameObject '{objectName}' not found{(inPrefabMode ? " in Prefab mode" : " in scene")}";
 
                 UnityEngine.Component component = null;
 
@@ -319,15 +372,25 @@ namespace UnityNaturalMCPExtesion.Editor
         [McpServerTool, Description("Get information about a specific GameObject")]
         public async ValueTask<string> GetObjectInfo(
             [Description("Name of the GameObject to inspect")]
-            string objectName)
+            string objectName,
+            [Description("Get info from Prefab mode context instead of scene (optional, default: false)")]
+            bool inPrefabMode = false)
         {
             try
             {
                 await UniTask.SwitchToMainThread();
 
-                var gameObject = GameObject.Find(objectName);
+                // Check if we're in Prefab mode when requested
+                if (inPrefabMode)
+                {
+                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                    if (prefabStage == null)
+                        return "Error: Prefab mode is not active. Please open a prefab first.";
+                }
+
+                var gameObject = FindGameObjectInContext(objectName, inPrefabMode);
                 if (gameObject == null)
-                    return $"Error: GameObject '{objectName}' not found";
+                    return $"Error: GameObject '{objectName}' not found{(inPrefabMode ? " in Prefab mode" : " in scene")}";
 
                 var info = new System.Text.StringBuilder();
                 info.AppendLine($"GameObject: {gameObject.name}");
@@ -357,43 +420,83 @@ namespace UnityNaturalMCPExtesion.Editor
             }
         }
 
-        [McpServerTool, Description("List all GameObjects in the active scene")]
+        [McpServerTool, Description("List all GameObjects in the active scene or Prefab mode")]
         public async ValueTask<string> ListSceneObjects(
             [Description("Optional filter to match object names (case-insensitive)")]
-            string nameFilter = null)
+            string nameFilter = null,
+            [Description("List objects in Prefab mode context instead of scene (optional, default: false)")]
+            bool inPrefabMode = false)
         {
             try
             {
                 await UniTask.SwitchToMainThread();
 
-                var allObjects = Resources.FindObjectsOfTypeAll<GameObject>();
                 var sceneObjects = new List<string>();
 
-                foreach (var obj in allObjects)
+                if (inPrefabMode)
                 {
-                    if (obj.scene != EditorSceneManager.GetActiveScene())
-                        continue;
+                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                    if (prefabStage == null)
+                        return "Error: Prefab mode is not active. Please open a prefab first.";
 
-                    if (EditorUtility.IsPersistent(obj))
-                        continue;
+                    var root = prefabStage.prefabContentsRoot;
+                    
+                    // Add root object
+                    if (string.IsNullOrEmpty(nameFilter) || 
+                        root.name.ToLowerInvariant().Contains(nameFilter.ToLowerInvariant()))
+                    {
+                        var pos = root.transform.position;
+                        var componentCount = root.GetComponents<UnityEngine.Component>().Length;
+                        sceneObjects.Add($"'{root.name}' at ({pos.x:F2}, {pos.y:F2}, {pos.z:F2}) (root) - {componentCount} components");
+                    }
 
-                    if (!string.IsNullOrEmpty(nameFilter) &&
-                        !obj.name.ToLowerInvariant().Contains(nameFilter.ToLowerInvariant()))
-                        continue;
+                    // Add all children
+                    foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+                    {
+                        if (child.gameObject == root)
+                            continue;
 
-                    var pos = obj.transform.position;
-                    var parentInfo = obj.transform.parent != null ? $" (child of {obj.transform.parent.name})" : " (root)";
-                    var componentCount = obj.GetComponents<UnityEngine.Component>().Length;
+                        if (!string.IsNullOrEmpty(nameFilter) &&
+                            !child.name.ToLowerInvariant().Contains(nameFilter.ToLowerInvariant()))
+                            continue;
 
-                    sceneObjects.Add($"'{obj.name}' at ({pos.x:F2}, {pos.y:F2}, {pos.z:F2}){parentInfo} - {componentCount} components");
+                        var pos = child.position;
+                        var parentInfo = child.parent != null ? $" (child of {child.parent.name})" : " (root)";
+                        var componentCount = child.GetComponents<UnityEngine.Component>().Length;
+
+                        sceneObjects.Add($"'{child.name}' at ({pos.x:F2}, {pos.y:F2}, {pos.z:F2}){parentInfo} - {componentCount} components");
+                    }
+                }
+                else
+                {
+                    var allObjects = Resources.FindObjectsOfTypeAll<GameObject>();
+
+                    foreach (var obj in allObjects)
+                    {
+                        if (obj.scene != EditorSceneManager.GetActiveScene())
+                            continue;
+
+                        if (EditorUtility.IsPersistent(obj))
+                            continue;
+
+                        if (!string.IsNullOrEmpty(nameFilter) &&
+                            !obj.name.ToLowerInvariant().Contains(nameFilter.ToLowerInvariant()))
+                            continue;
+
+                        var pos = obj.transform.position;
+                        var parentInfo = obj.transform.parent != null ? $" (child of {obj.transform.parent.name})" : " (root)";
+                        var componentCount = obj.GetComponents<UnityEngine.Component>().Length;
+
+                        sceneObjects.Add($"'{obj.name}' at ({pos.x:F2}, {pos.y:F2}, {pos.z:F2}){parentInfo} - {componentCount} components");
+                    }
                 }
 
                 if (sceneObjects.Count == 0)
                     return nameFilter != null
-                        ? $"No objects found matching filter '{nameFilter}'"
-                        : "No objects found in active scene";
+                        ? $"No objects found matching filter '{nameFilter}'{(inPrefabMode ? " in Prefab mode" : " in active scene")}"
+                        : $"No objects found{(inPrefabMode ? " in Prefab mode" : " in active scene")}";
 
-                var result = $"Found {sceneObjects.Count} objects in active scene";
+                var result = $"Found {sceneObjects.Count} objects{(inPrefabMode ? " in Prefab mode" : " in active scene")}";
                 if (!string.IsNullOrEmpty(nameFilter))
                     result += $" matching '{nameFilter}'";
                 result += ":\n" + string.Join("\n", sceneObjects);
@@ -706,6 +809,39 @@ namespace UnityNaturalMCPExtesion.Editor
             }
 
             return false;
+        }
+
+        private GameObject FindGameObjectInContext(string objectName, bool inPrefabMode)
+        {
+            if (string.IsNullOrEmpty(objectName))
+                return null;
+
+            if (inPrefabMode)
+            {
+                var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                if (prefabStage == null)
+                {
+                    Debug.LogError("Prefab mode is not active");
+                    return null;
+                }
+
+                var root = prefabStage.prefabContentsRoot;
+                if (root.name == objectName)
+                    return root;
+
+                // Search in children
+                foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+                {
+                    if (child.name == objectName)
+                        return child.gameObject;
+                }
+
+                return null;
+            }
+            else
+            {
+                return GameObject.Find(objectName);
+            }
         }
     }
 }
