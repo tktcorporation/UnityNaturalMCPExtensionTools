@@ -8,7 +8,7 @@ using Cysharp.Threading.Tasks;
 using ModelContextProtocol.Server;
 
 
-namespace Editor.McpTools
+namespace UnityNaturalMCPExtesion.Editor
 {
     [McpServerToolType, Description("Prefab編集モード管理ツール")]
     internal sealed class McpPrefabEditTool
@@ -143,7 +143,7 @@ namespace Editor.McpTools
                 // Prefabモードを閉じる
                 StageUtility.GoBackToPreviousStage();
 
-                var message = discardChanges 
+                var message = discardChanges
                     ? $"Prefab '{assetPath}' の編集モードを閉じました（変更は破棄されました）"
                     : $"Prefab '{assetPath}' の編集モードを閉じました";
 

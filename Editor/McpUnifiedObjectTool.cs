@@ -11,7 +11,7 @@ using System.Collections.Concurrent;
 using System.Linq;
 using Newtonsoft.Json;
 
-namespace Editor.McpTools
+namespace UnityNaturalMCPExtesion.Editor
 {
     /// <summary>
     /// Unified MCP tool for comprehensive object creation and manipulation in Unity
@@ -50,10 +50,10 @@ namespace Editor.McpTools
                     case "primitive":
                         if (string.IsNullOrEmpty(primitiveType))
                             return "Error: primitiveType is required when creating a primitive";
-                        
+
                         if (!Enum.TryParse<PrimitiveType>(primitiveType, true, out var primType))
                             return $"Error: Invalid primitive type '{primitiveType}'. Valid types: Cube, Sphere, Cylinder, Capsule, Plane, Quad";
-                        
+
                         gameObject = GameObject.CreatePrimitive(primType);
                         break;
 
@@ -64,11 +64,11 @@ namespace Editor.McpTools
                     case "prefab":
                         if (string.IsNullOrEmpty(prefabName))
                             return "Error: prefabName is required when creating from prefab";
-                        
+
                         var prefabAsset = FindPrefab(prefabName);
                         if (prefabAsset == null)
                             return $"Error: Prefab '{prefabName}' not found";
-                        
+
                         gameObject = PrefabUtility.InstantiatePrefab(prefabAsset) as GameObject;
                         break;
 
@@ -150,27 +150,27 @@ namespace Editor.McpTools
                 {
                     case "transform":
                         var changes = new List<string>();
-                        
+
                         if (position != null && position.Length >= 3)
                         {
                             gameObject.transform.position = new Vector3(position[0], position[1], position[2]);
                             changes.Add($"position: ({position[0]:F2}, {position[1]:F2}, {position[2]:F2})");
                         }
-                        
+
                         if (rotation != null && rotation.Length >= 3)
                         {
                             gameObject.transform.eulerAngles = new Vector3(rotation[0], rotation[1], rotation[2]);
                             changes.Add($"rotation: ({rotation[0]:F2}, {rotation[1]:F2}, {rotation[2]:F2})");
                         }
-                        
+
                         if (scale != null && scale.Length >= 3)
                         {
                             gameObject.transform.localScale = new Vector3(scale[0], scale[1], scale[2]);
                             changes.Add($"scale: ({scale[0]:F2}, {scale[1]:F2}, {scale[2]:F2})");
                         }
-                        
+
                         EditorUtility.SetDirty(gameObject);
-                        return changes.Count > 0 
+                        return changes.Count > 0
                             ? $"Successfully updated transform on '{objectName}': {string.Join(", ", changes)}"
                             : $"No transform changes applied to '{objectName}'";
 
@@ -183,32 +183,32 @@ namespace Editor.McpTools
                                 return $"Error: Parent GameObject '{parentName}' not found";
                             newParent = parentObj.transform;
                         }
-                        
+
                         var oldParent = gameObject.transform.parent;
                         gameObject.transform.SetParent(newParent, worldPositionStays);
                         EditorUtility.SetDirty(gameObject);
-                        
+
                         var parentInfo = newParent != null ? $"'{newParent.name}'" : "root";
                         var oldParentInfo = oldParent != null ? $"'{oldParent.name}'" : "root";
                         return $"Successfully moved '{objectName}' from {oldParentInfo} to {parentInfo}";
 
                     case "duplicate":
                         var duplicated = GameObject.Instantiate(gameObject);
-                        duplicated.name = !string.IsNullOrEmpty(newObjectName) 
-                            ? newObjectName 
+                        duplicated.name = !string.IsNullOrEmpty(newObjectName)
+                            ? newObjectName
                             : gameObject.name + "_Copy";
-                        
+
                         duplicated.transform.SetParent(gameObject.transform.parent);
-                        
+
                         if (position != null && position.Length >= 3)
                             duplicated.transform.position = new Vector3(position[0], position[1], position[2]);
-                        
+
                         if (rotation != null && rotation.Length >= 3)
                             duplicated.transform.eulerAngles = new Vector3(rotation[0], rotation[1], rotation[2]);
-                        
+
                         Undo.RegisterCreatedObjectUndo(duplicated, $"Duplicate {objectName}");
                         EditorUtility.SetDirty(duplicated);
-                        
+
                         return $"Successfully duplicated '{objectName}' as '{duplicated.name}'";
 
                     case "delete":
@@ -245,10 +245,10 @@ namespace Editor.McpTools
                     return $"Error: GameObject '{objectName}' not found";
 
                 UnityEngine.Component component = null;
-                
+
                 // Resolve component type using enhanced method
                 var compType = ResolveComponentType(componentType);
-                
+
                 if (compType == null)
                 {
                     // Try to suggest similar component names
@@ -256,11 +256,11 @@ namespace Editor.McpTools
                     var suggestionText = suggestions.Any() ? $" Did you mean: {string.Join(", ", suggestions)}?" : "";
                     return $"Error: Component type '{componentType}' not found.{suggestionText}";
                 }
-                
+
                 // Check if component already exists
                 component = gameObject.GetComponent(compType);
                 bool wasAdded = false;
-                
+
                 // Add component if it doesn't exist
                 if (component == null)
                 {
@@ -291,7 +291,7 @@ namespace Editor.McpTools
                         }
 
                         EditorUtility.SetDirty(gameObject);
-                        
+
                         var actionText = wasAdded ? "Added" : "Configured";
                         return changes.Count > 0
                             ? $"Successfully {actionText.ToLower()} {compType.Name} on '{objectName}': {string.Join(", ", changes)}"
@@ -335,13 +335,13 @@ namespace Editor.McpTools
                 info.AppendLine($"Position: {gameObject.transform.position}");
                 info.AppendLine($"Rotation: {gameObject.transform.eulerAngles}");
                 info.AppendLine($"Scale: {gameObject.transform.localScale}");
-                
+
                 if (gameObject.transform.parent != null)
                     info.AppendLine($"Parent: {gameObject.transform.parent.name}");
 
                 info.AppendLine($"Children: {gameObject.transform.childCount}");
                 info.AppendLine("Components:");
-                
+
                 foreach (var component in gameObject.GetComponents<UnityEngine.Component>())
                 {
                     if (component != null)
@@ -377,20 +377,20 @@ namespace Editor.McpTools
                     if (EditorUtility.IsPersistent(obj))
                         continue;
 
-                    if (!string.IsNullOrEmpty(nameFilter) && 
+                    if (!string.IsNullOrEmpty(nameFilter) &&
                         !obj.name.ToLowerInvariant().Contains(nameFilter.ToLowerInvariant()))
                         continue;
 
                     var pos = obj.transform.position;
                     var parentInfo = obj.transform.parent != null ? $" (child of {obj.transform.parent.name})" : " (root)";
                     var componentCount = obj.GetComponents<UnityEngine.Component>().Length;
-                    
+
                     sceneObjects.Add($"'{obj.name}' at ({pos.x:F2}, {pos.y:F2}, {pos.z:F2}){parentInfo} - {componentCount} components");
                 }
 
                 if (sceneObjects.Count == 0)
-                    return nameFilter != null 
-                        ? $"No objects found matching filter '{nameFilter}'" 
+                    return nameFilter != null
+                        ? $"No objects found matching filter '{nameFilter}'"
                         : "No objects found in active scene";
 
                 var result = $"Found {sceneObjects.Count} objects in active scene";
@@ -410,16 +410,16 @@ namespace Editor.McpTools
         private GameObject FindPrefab(string prefabName)
         {
             var prefabGuids = AssetDatabase.FindAssets($"t:Prefab {prefabName}");
-            
+
             foreach (var guid in prefabGuids)
             {
                 var path = AssetDatabase.GUIDToAssetPath(guid);
                 var asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-                
+
                 if (asset != null && asset.name == prefabName)
                     return asset;
             }
-            
+
             return null;
         }
 
@@ -427,7 +427,7 @@ namespace Editor.McpTools
         {
             var suggestions = new List<string>();
             var lowerInput = componentType.ToLowerInvariant();
-            
+
             // Common Unity components for suggestions
             var commonComponents = new[]
             {
@@ -438,32 +438,32 @@ namespace Editor.McpTools
                 "CharacterController", "NavMeshAgent", "AudioListener", "Canvas", "Image",
                 "Text", "Button", "Slider", "Toggle", "InputField", "Dropdown", "ScrollRect"
             };
-            
+
             // Find components that start with the same letter or contain the input
             foreach (var comp in commonComponents)
             {
                 var lowerComp = comp.ToLowerInvariant();
-                if (lowerComp.StartsWith(lowerInput) || 
-                    lowerComp.Contains(lowerInput) || 
+                if (lowerComp.StartsWith(lowerInput) ||
+                    lowerComp.Contains(lowerInput) ||
                     LevenshteinDistance(lowerInput, lowerComp) <= 2)
                 {
                     suggestions.Add(comp);
                 }
             }
-            
+
             return suggestions.Take(3).ToList(); // Limit to 3 suggestions
         }
-        
+
         private int LevenshteinDistance(string s1, string s2)
         {
             if (string.IsNullOrEmpty(s1)) return s2?.Length ?? 0;
             if (string.IsNullOrEmpty(s2)) return s1.Length;
-            
+
             var matrix = new int[s1.Length + 1, s2.Length + 1];
-            
+
             for (int i = 0; i <= s1.Length; i++) matrix[i, 0] = i;
             for (int j = 0; j <= s2.Length; j++) matrix[0, j] = j;
-            
+
             for (int i = 1; i <= s1.Length; i++)
             {
                 for (int j = 1; j <= s2.Length; j++)
@@ -475,7 +475,7 @@ namespace Editor.McpTools
                         matrix[i - 1, j - 1] + cost); // substitution
                 }
             }
-            
+
             return matrix[s1.Length, s2.Length];
         }
 
@@ -490,13 +490,13 @@ namespace Editor.McpTools
 
             // Normalize component name (handle case variations)
             var normalizedName = NormalizeComponentName(componentType);
-            
+
             // Common Unity assemblies to search
             var assembliesToSearch = new[]
             {
                 "UnityEngine",
                 "UnityEngine.CoreModule",
-                "UnityEngine.PhysicsModule", 
+                "UnityEngine.PhysicsModule",
                 "UnityEngine.Physics2DModule",
                 "UnityEngine.AudioModule",
                 "UnityEngine.AnimationModule",
@@ -599,7 +599,7 @@ namespace Editor.McpTools
             // Default: capitalize first letter
             if (componentType.Length > 0)
                 return char.ToUpper(componentType[0]) + componentType.Substring(1);
-            
+
             return componentType;
         }
 
@@ -636,7 +636,7 @@ namespace Editor.McpTools
             {
                 var type = component.GetType();
                 var property = type.GetProperty(propertyName);
-                
+
                 if (property != null && property.CanWrite)
                 {
                     if (value is Newtonsoft.Json.Linq.JArray jArray)
@@ -667,7 +667,7 @@ namespace Editor.McpTools
                         return true;
                     }
                 }
-                
+
                 var field = type.GetField(propertyName);
                 if (field != null)
                 {
@@ -704,7 +704,7 @@ namespace Editor.McpTools
             {
                 Debug.LogWarning($"Failed to set property {propertyName}: {e.Message}");
             }
-            
+
             return false;
         }
     }

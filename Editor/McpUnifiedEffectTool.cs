@@ -8,7 +8,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace Editor.McpTools
+namespace UnityNaturalMCPExtesion.Editor
 {
     /// <summary>
     /// Unified MCP tool for particle system management in Unity
@@ -42,7 +42,7 @@ namespace Editor.McpTools
                     return $"Error: GameObject '{objectName}' not found";
 
                 var particleSystem = FindParticleSystem(objectName);
-                
+
                 if (particleSystem == null && createNew)
                 {
                     // Create new particle system
@@ -50,12 +50,12 @@ namespace Editor.McpTools
                     psGameObject.transform.SetParent(gameObject.transform);
                     psGameObject.transform.localPosition = Vector3.zero;
                     particleSystem = psGameObject.AddComponent<ParticleSystem>();
-                    
+
                     // Set basic defaults
                     var main = particleSystem.main;
                     main.playOnAwake = false;
                     main.loop = false;
-                    
+
                     // Assign appropriate material based on particle system type
                     AssignDefaultMaterial(particleSystem);
                 }
@@ -73,7 +73,7 @@ namespace Editor.McpTools
                     {
                         var settings = JsonConvert.DeserializeObject<Dictionary<string, object>>(mainSettings);
                         var main = particleSystem.main;
-                        
+
                         foreach (var setting in settings)
                         {
                             switch (setting.Key.ToLower())
@@ -134,7 +134,7 @@ namespace Editor.McpTools
                     {
                         var settings = JsonConvert.DeserializeObject<Dictionary<string, object>>(shapeSettings);
                         var shape = particleSystem.shape;
-                        
+
                         foreach (var setting in settings)
                         {
                             switch (setting.Key.ToLower())
@@ -177,7 +177,7 @@ namespace Editor.McpTools
                     {
                         var settings = JsonConvert.DeserializeObject<Dictionary<string, object>>(emissionSettings);
                         var emission = particleSystem.emission;
-                        
+
                         foreach (var setting in settings)
                         {
                             switch (setting.Key.ToLower())
@@ -216,7 +216,7 @@ namespace Editor.McpTools
                     {
                         var settings = JsonConvert.DeserializeObject<Dictionary<string, object>>(velocitySettings);
                         var velocity = particleSystem.velocityOverLifetime;
-                        
+
                         foreach (var setting in settings)
                         {
                             switch (setting.Key.ToLower())
@@ -263,7 +263,7 @@ namespace Editor.McpTools
                 EditorUtility.SetDirty(particleSystem);
 
                 if (changes.Count == 0)
-                    return createNew 
+                    return createNew
                         ? $"Created ParticleSystem on '{objectName}' with default settings"
                         : $"No changes applied to ParticleSystem on '{objectName}'";
 
@@ -367,7 +367,7 @@ namespace Editor.McpTools
                 {
                     defaultMaterial = new Material(Shader.Find("Sprites/Default"));
                     defaultMaterial.name = "Particle Default Material";
-                    
+
                     // Save it as an asset
                     if (!AssetDatabase.IsValidFolder("Assets/Materials"))
                     {

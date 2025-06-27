@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityNaturalMCP.Editor;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Editor.McpTools
+namespace UnityNaturalMCPExtesion.Editor
 {
     /// <summary>
     /// Builder for the Prefab edit mode MCP tool

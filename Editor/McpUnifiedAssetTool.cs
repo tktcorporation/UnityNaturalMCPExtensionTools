@@ -8,7 +8,7 @@ using UnityEngine;
 using System.IO;
 using System.Collections.Generic;
 
-namespace Editor.McpTools
+namespace UnityNaturalMCPExtesion.Editor
 {
     /// <summary>
     /// Unified MCP tool for material, asset, and folder management in Unity
@@ -51,19 +51,19 @@ namespace Editor.McpTools
                     case "create":
                         if (string.IsNullOrEmpty(shaderName))
                             shaderName = "Universal Render Pipeline/Lit";
-                        
+
                         var shader = Shader.Find(shaderName);
                         if (shader == null)
                             return $"Error: Shader '{shaderName}' not found";
-                        
+
                         material = new Material(shader);
                         material.name = materialName;
-                        
+
                         var path = $"Assets/Materials/{materialName}.mat";
-                        
+
                         if (!AssetDatabase.IsValidFolder("Assets/Materials"))
                             AssetDatabase.CreateFolder("Assets", "Materials");
-                        
+
                         AssetDatabase.CreateAsset(material, path);
                         changes.Add($"created at '{path}' with shader '{shaderName}'");
                         break;
@@ -72,7 +72,7 @@ namespace Editor.McpTools
                         material = FindMaterial(materialName);
                         if (material == null)
                             return $"Error: Material '{materialName}' not found";
-                        
+
                         if (!string.IsNullOrEmpty(shaderName))
                         {
                             var newShader = Shader.Find(shaderName);
@@ -92,17 +92,17 @@ namespace Editor.McpTools
                 if (baseColor != null && baseColor.Length >= 3)
                 {
                     var color = new Color(
-                        baseColor[0], 
-                        baseColor[1], 
-                        baseColor[2], 
+                        baseColor[0],
+                        baseColor[1],
+                        baseColor[2],
                         baseColor.Length > 3 ? baseColor[3] : 1.0f
                     );
-                    
+
                     if (material.HasProperty("_BaseColor"))
                         material.SetColor("_BaseColor", color);
                     else if (material.HasProperty("_Color"))
                         material.SetColor("_Color", color);
-                    
+
                     changes.Add($"baseColor: ({color.r:F2}, {color.g:F2}, {color.b:F2}, {color.a:F2})");
                 }
 
@@ -235,10 +235,10 @@ namespace Editor.McpTools
                 {
                     var path = AssetDatabase.GUIDToAssetPath(guid);
                     var material = AssetDatabase.LoadAssetAtPath<Material>(path);
-                    
+
                     if (material != null)
                     {
-                        if (string.IsNullOrEmpty(nameFilter) || 
+                        if (string.IsNullOrEmpty(nameFilter) ||
                             material.name.ToLowerInvariant().Contains(nameFilter.ToLowerInvariant()))
                         {
                             materials.Add($"'{material.name}' at '{path}' (Shader: {material.shader.name})");
@@ -247,8 +247,8 @@ namespace Editor.McpTools
                 }
 
                 if (materials.Count == 0)
-                    return nameFilter != null 
-                        ? $"No materials found matching filter '{nameFilter}'" 
+                    return nameFilter != null
+                        ? $"No materials found matching filter '{nameFilter}'"
                         : "No materials found in project";
 
                 var result = $"Found {materials.Count} materials";
@@ -285,19 +285,19 @@ namespace Editor.McpTools
                     case "createfolder":
                         if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(folderName))
                             return "Error: Both path and folderName are required for createFolder";
-                        
+
                         if (!AssetDatabase.IsValidFolder(path))
                             return $"Error: Parent path '{path}' does not exist";
-                        
+
                         var fullPath = Path.Combine(path, folderName).Replace('\\', '/');
-                        
+
                         if (AssetDatabase.IsValidFolder(fullPath))
                             return $"Warning: Folder '{fullPath}' already exists";
-                        
+
                         var guid = AssetDatabase.CreateFolder(path, folderName);
                         AssetDatabase.SaveAssets();
                         AssetDatabase.Refresh();
-                        
+
                         return string.IsNullOrEmpty(guid)
                             ? $"Error: Failed to create folder '{fullPath}'"
                             : $"Successfully created folder '{fullPath}'";
@@ -305,40 +305,40 @@ namespace Editor.McpTools
                     case "createprefab":
                         if (string.IsNullOrEmpty(objectName) || string.IsNullOrEmpty(path))
                             return "Error: Both objectName and path are required for createPrefab";
-                        
+
                         var gameObject = GameObject.Find(objectName);
                         if (gameObject == null)
                             return $"Error: GameObject '{objectName}' not found in scene";
-                        
+
                         if (!path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
                             path += ".prefab";
-                        
+
                         if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
                             path = Path.Combine("Assets", path).Replace('\\', '/');
-                        
+
                         // Create directory structure if needed
                         var directory = Path.GetDirectoryName(path).Replace('\\', '/');
                         EnsureDirectoryExists(directory);
-                        
+
                         var prefab = PrefabUtility.SaveAsPrefabAsset(gameObject, path);
-                        
+
                         if (prefab == null)
                             return $"Error: Failed to create prefab at '{path}'";
-                        
+
                         AssetDatabase.SaveAssets();
                         AssetDatabase.Refresh();
-                        
+
                         return $"Successfully created prefab '{prefab.name}' at '{path}' from GameObject '{objectName}'";
 
                     case "delete":
                         if (string.IsNullOrEmpty(path))
                             return "Error: Path is required for delete operation";
-                        
+
                         if (!File.Exists(path) && !Directory.Exists(path))
                             return $"Error: Asset at path '{path}' does not exist";
-                        
+
                         var assetName = Path.GetFileName(path);
-                        
+
                         if (AssetDatabase.DeleteAsset(path))
                         {
                             AssetDatabase.SaveAssets();
@@ -377,10 +377,10 @@ namespace Editor.McpTools
                 {
                     var path = AssetDatabase.GUIDToAssetPath(guid);
                     var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-                    
+
                     if (prefab != null)
                     {
-                        if (string.IsNullOrEmpty(nameFilter) || 
+                        if (string.IsNullOrEmpty(nameFilter) ||
                             prefab.name.ToLowerInvariant().Contains(nameFilter.ToLowerInvariant()))
                         {
                             var componentCount = prefab.GetComponents<UnityEngine.Component>().Length;
@@ -390,8 +390,8 @@ namespace Editor.McpTools
                 }
 
                 if (prefabs.Count == 0)
-                    return nameFilter != null 
-                        ? $"No prefabs found matching filter '{nameFilter}'" 
+                    return nameFilter != null
+                        ? $"No prefabs found matching filter '{nameFilter}'"
                         : "No prefabs found in project";
 
                 var result = $"Found {prefabs.Count} prefabs";
@@ -411,16 +411,16 @@ namespace Editor.McpTools
         private Material FindMaterial(string materialName)
         {
             var materialGuids = AssetDatabase.FindAssets($"t:Material {materialName}");
-            
+
             foreach (var guid in materialGuids)
             {
                 var path = AssetDatabase.GUIDToAssetPath(guid);
                 var material = AssetDatabase.LoadAssetAtPath<Material>(path);
-                
+
                 if (material != null && material.name == materialName)
                     return material;
             }
-            
+
             return null;
         }
 
@@ -430,7 +430,7 @@ namespace Editor.McpTools
             {
                 var pathParts = directory.Split('/');
                 var currentPath = pathParts[0];
-                
+
                 for (int i = 1; i < pathParts.Length; i++)
                 {
                     var nextPath = Path.Combine(currentPath, pathParts[i]).Replace('\\', '/');

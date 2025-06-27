@@ -11,7 +11,7 @@ using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace Editor.McpTools
+namespace UnityNaturalMCPExtesion.Editor
 {
     /// <summary>
     /// MCP tool for capturing Unity scene views to image files
