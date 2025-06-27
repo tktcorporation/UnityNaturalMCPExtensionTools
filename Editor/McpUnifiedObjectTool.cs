@@ -142,11 +142,11 @@ namespace UnityNaturalMCPExtension.Editor
             }
         }
 
-        [McpServerTool, Description("Manipulate existing objects (transform, parent, duplicate, or delete)")]
+        [McpServerTool, Description("Manipulate existing objects (transform, parent, duplicate, rename, or delete)")]
         public async ValueTask<string> ManipulateObject(
             [Description("Name of the GameObject to manipulate")]
             string objectName,
-            [Description("Operation to perform: 'transform', 'parent', 'duplicate', or 'delete'")]
+            [Description("Operation to perform: 'transform', 'parent', 'duplicate', 'rename', or 'delete'")]
             string operation,
             [Description("For transform/duplicate: Position [x,y,z] (optional)")]
             float[] position = null,
@@ -158,6 +158,8 @@ namespace UnityNaturalMCPExtension.Editor
             string parentName = null,
             [Description("For duplicate: Name for the duplicated object (optional)")]
             string newObjectName = null,
+            [Description("For rename: New name for the object (optional)")]
+            string newName = null,
             [Description("For parent: Keep world position when parenting (optional, default: true)")]
             bool worldPositionStays = true,
             [Description("Operate in Prefab mode context instead of scene (optional, default: false)")]
@@ -244,6 +246,30 @@ namespace UnityNaturalMCPExtension.Editor
 
                         return $"Successfully duplicated '{objectName}' as '{duplicated.name}'";
 
+                    case "rename":
+                        if (string.IsNullOrEmpty(newName))
+                            return "Error: newName is required for rename operation";
+                        
+                        var oldName = gameObject.name;
+                        Undo.RecordObject(gameObject, $"Rename {oldName}");
+                        gameObject.name = newName;
+                        EditorUtility.SetDirty(gameObject);
+                        
+                        if (inPrefabMode)
+                        {
+                            var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                            if (prefabStage != null)
+                            {
+                                EditorSceneManager.MarkSceneDirty(prefabStage.scene);
+                            }
+                        }
+                        else
+                        {
+                            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+                        }
+                        
+                        return $"Successfully renamed GameObject from '{oldName}' to '{newName}'";
+
                     case "delete":
                         Undo.DestroyObjectImmediate(gameObject);
                         if (inPrefabMode)
@@ -261,7 +287,7 @@ namespace UnityNaturalMCPExtension.Editor
                         return $"Successfully deleted GameObject '{objectName}'";
 
                     default:
-                        return "Error: operation must be 'transform', 'parent', 'duplicate', or 'delete'";
+                        return "Error: operation must be 'transform', 'parent', 'duplicate', 'rename', or 'delete'";
                 }
             }
             catch (Exception e)
