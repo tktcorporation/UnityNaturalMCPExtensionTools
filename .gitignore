@@ -75,3 +75,4 @@ Assets/BuildReports
 Assets/BuildReports.meta
 
 .mcp.json
+.claude/**/*local*
