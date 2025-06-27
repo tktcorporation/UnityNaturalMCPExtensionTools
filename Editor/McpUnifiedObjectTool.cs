@@ -6,7 +6,8 @@ using ModelContextProtocol.Server;
 using UnityEditor;
 using UnityEngine;
 using UnityEditor.SceneManagement;
-using UnityEditor.Experimental.SceneManagement;
+using UnityEditor.Animations;
+
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Linq;
@@ -1122,26 +1123,191 @@ namespace UnityNaturalMCPExtension.Editor
 
         private UnityEngine.Object ResolveObjectReference(string objectName, Type targetType, bool inPrefabMode)
         {
-            if (string.IsNullOrEmpty(objectName))
+            if (string.IsNullOrEmpty(objectName) || targetType == null)
                 return null;
 
-            var gameObject = FindGameObjectInContext(objectName, inPrefabMode);
-            if (gameObject == null)
-                return null;
+            Debug.Log($"Resolving object reference '{objectName}' for type {targetType.Name}");
 
-            // Handle different Unity object types
+            // Strategy 1: Asset types should be found in Asset Database
+            if (IsAssetType(targetType))
+            {
+                Debug.Log($"Type {targetType.Name} is an asset type, searching in Asset Database");
+                return FindAssetByNameAndType(objectName, targetType);
+            }
+
+            // Strategy 2: Scene object types should be found in scene
+            if (IsSceneObjectType(targetType))
+            {
+                Debug.Log($"Type {targetType.Name} is a scene object type, searching in scene");
+                var gameObject = FindGameObjectInContext(objectName, inPrefabMode);
+                if (gameObject == null)
+                {
+                    Debug.LogWarning($"GameObject '{objectName}' not found in {(inPrefabMode ? "Prefab mode" : "scene")}");
+                    return null;
+                }
+
+                // Handle different Unity object types
+                if (targetType == typeof(Transform))
+                {
+                    return gameObject.transform;
+                }
+                else if (typeof(UnityEngine.Component).IsAssignableFrom(targetType))
+                {
+                    var component = gameObject.GetComponent(targetType);
+                    if (component == null)
+                    {
+                        Debug.LogWarning($"Component of type {targetType.Name} not found on GameObject '{objectName}'");
+                    }
+                    return component;
+                }
+            }
+
+            // Strategy 3: GameObject - try scene first, then asset (Prefab)
             if (targetType == typeof(GameObject))
             {
-                return gameObject;
+                Debug.Log($"Type is GameObject, searching in scene first");
+                var gameObject = FindGameObjectInContext(objectName, inPrefabMode);
+                if (gameObject != null)
+                {
+                    Debug.Log($"Found GameObject '{objectName}' in {(inPrefabMode ? "Prefab mode" : "scene")}");
+                    return gameObject;
+                }
+
+                // If not found in scene, try as Prefab asset
+                Debug.Log($"GameObject '{objectName}' not found in scene, trying as Prefab asset");
+                var prefabAsset = FindAssetByNameAndType(objectName, targetType);
+                if (prefabAsset != null)
+                {
+                    Debug.Log($"Found Prefab asset '{objectName}'");
+                    return prefabAsset;
+                }
+
+                Debug.LogWarning($"GameObject or Prefab '{objectName}' not found");
+                return null;
             }
-            else if (targetType == typeof(Transform))
+
+            Debug.LogWarning($"Unsupported target type {targetType.Name} for object reference '{objectName}'");
+            return null;
+        }
+
+        private bool IsAssetType(Type type)
+        {
+            if (type == null)
+                return false;
+
+            // Common Unity asset types that should be found in the Asset Database
+            var assetTypes = new[]
             {
-                return gameObject.transform;
-            }
-            else if (typeof(UnityEngine.Component).IsAssignableFrom(targetType))
+                typeof(AudioClip),
+                typeof(Material),
+                typeof(Texture),
+                typeof(Texture2D),
+                typeof(Mesh),
+                typeof(Sprite),
+                typeof(Font),
+                typeof(Shader),
+                typeof(ScriptableObject),
+                typeof(AnimationClip),
+                typeof(AnimatorController),
+                typeof(PhysicsMaterial),
+                typeof(PhysicsMaterial2D)
+            };
+
+            // Check if the type is exactly one of the asset types or inherits from them
+            return assetTypes.Any(assetType => assetType.IsAssignableFrom(type));
+        }
+
+        private bool IsSceneObjectType(Type type)
+        {
+            if (type == null)
+                return false;
+
+            // Types that should be found in the scene
+            return type == typeof(Transform) || 
+                   typeof(UnityEngine.Component).IsAssignableFrom(type);
+        }
+
+        private UnityEngine.Object FindAssetByNameAndType(string assetName, Type targetType)
+        {
+            if (string.IsNullOrEmpty(assetName) || targetType == null)
+                return null;
+
+            try
             {
-                return gameObject.GetComponent(targetType);
+                // Get the type name for AssetDatabase search
+                string typeName = GetAssetDatabaseTypeName(targetType);
+                if (string.IsNullOrEmpty(typeName))
+                    return null;
+
+                // Search for assets with the specified type and name
+                var guids = AssetDatabase.FindAssets($"t:{typeName} {assetName}");
+                
+                foreach (var guid in guids)
+                {
+                    var assetPath = AssetDatabase.GUIDToAssetPath(guid);
+                    var asset = AssetDatabase.LoadAssetAtPath(assetPath, targetType);
+                    
+                    if (asset != null && asset.name == assetName)
+                    {
+                        Debug.Log($"Found asset '{assetName}' of type {targetType.Name} at path: {assetPath}");
+                        return asset;
+                    }
+                }
+
+                // If no exact match found, try without name filter
+                guids = AssetDatabase.FindAssets($"t:{typeName}");
+                foreach (var guid in guids)
+                {
+                    var assetPath = AssetDatabase.GUIDToAssetPath(guid);
+                    var asset = AssetDatabase.LoadAssetAtPath(assetPath, targetType);
+                    
+                    if (asset != null && asset.name.Equals(assetName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Debug.Log($"Found asset '{assetName}' of type {targetType.Name} at path: {assetPath} (case-insensitive match)");
+                        return asset;
+                    }
+                }
+
+                Debug.LogWarning($"Asset '{assetName}' of type {targetType.Name} not found in project");
+                return null;
             }
+            catch (Exception e)
+            {
+                Debug.LogError($"Error searching for asset '{assetName}' of type {targetType.Name}: {e.Message}");
+                return null;
+            }
+        }
+
+        private string GetAssetDatabaseTypeName(Type type)
+        {
+            // Map Unity types to their AssetDatabase type names
+            var typeMap = new Dictionary<Type, string>
+            {
+                { typeof(AudioClip), "AudioClip" },
+                { typeof(Material), "Material" },
+                { typeof(Texture), "Texture" },
+                { typeof(Texture2D), "Texture2D" },
+                { typeof(Mesh), "Mesh" },
+                { typeof(Sprite), "Sprite" },
+                { typeof(Font), "Font" },
+                { typeof(Shader), "Shader" },
+                { typeof(AnimationClip), "AnimationClip" },
+                { typeof(AnimatorController), "AnimatorController" },
+                { typeof(PhysicsMaterial), "PhysicsMaterial" },
+                { typeof(PhysicsMaterial2D), "PhysicsMaterial2D" },
+                { typeof(GameObject), "Prefab" } // For Prefab assets
+            };
+
+            if (typeMap.TryGetValue(type, out var typeName))
+                return typeName;
+
+            // Handle ScriptableObject and its derivatives
+            if (typeof(ScriptableObject).IsAssignableFrom(type))
+                return "ScriptableObject";
+
+            // Return the type name for other Unity objects
+            if (typeof(UnityEngine.Object).IsAssignableFrom(type))
+                return type.Name;
 
             return null;
         }
