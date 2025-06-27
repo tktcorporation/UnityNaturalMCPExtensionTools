@@ -8,7 +8,7 @@ using Cysharp.Threading.Tasks;
 using ModelContextProtocol.Server;
 
 
-namespace UnityNaturalMCPExtesion.Editor
+namespace UnityNaturalMCPExtension.Editor
 {
     [McpServerToolType, Description("Prefab編集モード管理ツール")]
     internal sealed class McpPrefabEditTool

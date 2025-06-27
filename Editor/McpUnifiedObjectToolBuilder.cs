@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityNaturalMCP.Editor;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace UnityNaturalMCPExtesion.Editor
+namespace UnityNaturalMCPExtension.Editor
 {
     /// <summary>
     /// Builder for the unified object manipulation MCP tool

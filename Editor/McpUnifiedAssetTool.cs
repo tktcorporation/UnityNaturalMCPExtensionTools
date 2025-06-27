@@ -8,7 +8,7 @@ using UnityEngine;
 using System.IO;
 using System.Collections.Generic;
 
-namespace UnityNaturalMCPExtesion.Editor
+namespace UnityNaturalMCPExtension.Editor
 {
     /// <summary>
     /// Unified MCP tool for material, asset, and folder management in Unity

@@ -8,7 +8,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace UnityNaturalMCPExtesion.Editor
+namespace UnityNaturalMCPExtension.Editor
 {
     /// <summary>
     /// Unified MCP tool for particle system management in Unity

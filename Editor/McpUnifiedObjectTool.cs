@@ -13,7 +13,7 @@ using System.Linq;
 using System.Reflection;
 using Newtonsoft.Json;
 
-namespace UnityNaturalMCPExtesion.Editor
+namespace UnityNaturalMCPExtension.Editor
 {
     /// <summary>
     /// Unified MCP tool for comprehensive object creation and manipulation in Unity
@@ -456,9 +456,9 @@ namespace UnityNaturalMCPExtesion.Editor
                         return "Error: Prefab mode is not active. Please open a prefab first.";
 
                     var root = prefabStage.prefabContentsRoot;
-                    
+
                     // Add root object
-                    if (string.IsNullOrEmpty(nameFilter) || 
+                    if (string.IsNullOrEmpty(nameFilter) ||
                         root.name.ToLowerInvariant().Contains(nameFilter.ToLowerInvariant()))
                     {
                         var pos = root.transform.position;
@@ -754,13 +754,13 @@ namespace UnityNaturalMCPExtesion.Editor
             try
             {
                 var type = component.GetType();
-                
+
                 // First try to find as a property (public properties)
                 var property = type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
                 if (property != null && property.CanWrite)
                 {
                     Debug.Log($"Found property '{propertyName}' of type {property.PropertyType} on {type.Name}");
-                    return SetPropertyValue(component, property.PropertyType, propertyName, value, inPrefabMode, 
+                    return SetPropertyValue(component, property.PropertyType, propertyName, value, inPrefabMode,
                         (val) => property.SetValue(component, val));
                 }
 
@@ -778,7 +778,7 @@ namespace UnityNaturalMCPExtesion.Editor
                     .Where(f => f.GetCustomAttribute<SerializeField>() != null || f.IsPublic)
                     .Select(f => $"{f.Name} ({f.FieldType.Name})")
                     .ToArray();
-                
+
                 var availableProperties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                     .Where(p => p.CanWrite)
                     .Select(p => $"{p.Name} ({p.PropertyType.Name})")
@@ -799,7 +799,7 @@ namespace UnityNaturalMCPExtesion.Editor
         private bool SetPropertyValue(UnityEngine.Component component, Type targetType, string propertyName, object value, bool inPrefabMode, Action<object> setValue)
         {
             Debug.Log($"Setting property '{propertyName}' of type {targetType.Name} with value '{value}' (type: {value?.GetType().Name})");
-            
+
             // Handle Unity object references (Transform, GameObject, Component types)
             if (value is string stringValue && IsUnityObjectType(targetType))
             {
@@ -899,13 +899,13 @@ namespace UnityNaturalMCPExtesion.Editor
             {
                 var type = component.GetType();
                 var details = new List<string>();
-                
+
                 // First try to find as a property (public properties)
                 var property = type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
                 if (property != null && property.CanWrite)
                 {
                     details.Add($"Found property '{propertyName}' of type {property.PropertyType} on {type.Name}");
-                    var result = SetPropertyValueWithDetails(component, property.PropertyType, propertyName, value, inPrefabMode, 
+                    var result = SetPropertyValueWithDetails(component, property.PropertyType, propertyName, value, inPrefabMode,
                         (val) => property.SetValue(component, val));
                     if (result.Success)
                     {
@@ -939,7 +939,7 @@ namespace UnityNaturalMCPExtesion.Editor
                     .Where(f => f.GetCustomAttribute<SerializeField>() != null || f.IsPublic)
                     .Select(f => $"{f.Name} ({f.FieldType.Name})")
                     .ToArray();
-                
+
                 var availableProperties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                     .Where(p => p.CanWrite)
                     .Select(p => $"{p.Name} ({p.PropertyType.Name})")
@@ -962,7 +962,7 @@ namespace UnityNaturalMCPExtesion.Editor
         {
             var details = new List<string>();
             details.Add($"Setting property '{propertyName}' of type {targetType.Name} with value '{value}' (type: {value?.GetType().Name})");
-            
+
             // Handle Unity object references (Transform, GameObject, Component types)
             if (value is string stringValue && IsUnityObjectType(targetType))
             {

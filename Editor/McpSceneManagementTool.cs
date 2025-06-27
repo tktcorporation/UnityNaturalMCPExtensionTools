@@ -10,7 +10,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.IO;
 
-namespace UnityNaturalMCPExtesion.Editor
+namespace UnityNaturalMCPExtension.Editor
 {
     /// <summary>
     /// MCP tool for Unity Scene creation and management
@@ -416,12 +416,12 @@ namespace UnityNaturalMCPExtesion.Editor
         {
             // First try exact match
             var sceneGuids = AssetDatabase.FindAssets($"t:Scene {sceneName}");
-            
+
             foreach (var guid in sceneGuids)
             {
                 var path = AssetDatabase.GUIDToAssetPath(guid);
                 var name = Path.GetFileNameWithoutExtension(path);
-                
+
                 if (name.Equals(sceneName, StringComparison.OrdinalIgnoreCase))
                     return path;
             }
@@ -451,7 +451,7 @@ namespace UnityNaturalMCPExtesion.Editor
                 {
                     var fileInfo = new FileInfo(fullPath);
                     var sizeInBytes = fileInfo.Length;
-                    
+
                     if (sizeInBytes < 1024)
                         return $"{sizeInBytes} B";
                     else if (sizeInBytes < 1024 * 1024)
@@ -464,7 +464,7 @@ namespace UnityNaturalMCPExtesion.Editor
             {
                 // Ignore file access errors
             }
-            
+
             return "unknown size";
         }
     }
