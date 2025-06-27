@@ -10,6 +10,7 @@ using UnityEditor.Experimental.SceneManagement;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Reflection;
 using Newtonsoft.Json;
 
 namespace UnityNaturalMCPExtesion.Editor
@@ -276,7 +277,7 @@ namespace UnityNaturalMCPExtesion.Editor
             string objectName,
             [Description("Component type (e.g., 'Rigidbody', 'BoxCollider', 'AudioSource', 'Renderer')")]
             string componentType,
-            [Description("JSON string with component properties to set (optional)")]
+            [Description("JSON string with component properties to set. For Unity object references, use object names as strings (e.g., {\"groundCheck\": \"GroundCheck\"}) (optional)")]
             string properties = null,
             [Description("Configure in Prefab mode context instead of scene (optional, default: false)")]
             bool inPrefabMode = false)
@@ -336,19 +337,34 @@ namespace UnityNaturalMCPExtesion.Editor
                     {
                         var propsDict = JsonConvert.DeserializeObject<Dictionary<string, object>>(properties);
                         var changes = new List<string>();
+                        var errors = new List<string>();
 
                         foreach (var prop in propsDict)
                         {
-                            if (SetComponentProperty(component, prop.Key, prop.Value))
+                            var result = SetComponentPropertyWithDetails(component, prop.Key, prop.Value, inPrefabMode);
+                            if (result.Success)
+                            {
                                 changes.Add($"{prop.Key}: {prop.Value}");
+                            }
+                            else
+                            {
+                                errors.Add($"{prop.Key}: {result.ErrorMessage}");
+                            }
                         }
 
                         EditorUtility.SetDirty(gameObject);
 
                         var actionText = wasAdded ? "Added" : "Configured";
-                        return changes.Count > 0
+                        var result_message = changes.Count > 0
                             ? $"Successfully {actionText.ToLower()} {compType.Name} on '{objectName}': {string.Join(", ", changes)}"
                             : $"{actionText} {compType.Name} to '{objectName}' but no properties were set";
+
+                        if (errors.Count > 0)
+                        {
+                            result_message += $"\nErrors: {string.Join("; ", errors)}";
+                        }
+
+                        return result_message;
                     }
                     catch (JsonException)
                     {
@@ -733,82 +749,302 @@ namespace UnityNaturalMCPExtesion.Editor
             return true;
         }
 
-        private bool SetComponentProperty(UnityEngine.Component component, string propertyName, object value)
+        private bool SetComponentProperty(UnityEngine.Component component, string propertyName, object value, bool inPrefabMode = false)
         {
             try
             {
                 var type = component.GetType();
-                var property = type.GetProperty(propertyName);
-
+                
+                // First try to find as a property (public properties)
+                var property = type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
                 if (property != null && property.CanWrite)
                 {
-                    if (value is Newtonsoft.Json.Linq.JArray jArray)
-                    {
-                        if (property.PropertyType == typeof(Vector3))
-                        {
-                            var values = jArray.ToObject<float[]>();
-                            if (values.Length >= 3)
-                            {
-                                property.SetValue(component, new Vector3(values[0], values[1], values[2]));
-                                return true;
-                            }
-                        }
-                        else if (property.PropertyType == typeof(Color))
-                        {
-                            var values = jArray.ToObject<float[]>();
-                            if (values.Length >= 3)
-                            {
-                                property.SetValue(component, new Color(values[0], values[1], values[2], values.Length > 3 ? values[3] : 1f));
-                                return true;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        var convertedValue = Convert.ChangeType(value, property.PropertyType);
-                        property.SetValue(component, convertedValue);
-                        return true;
-                    }
+                    Debug.Log($"Found property '{propertyName}' of type {property.PropertyType} on {type.Name}");
+                    return SetPropertyValue(component, property.PropertyType, propertyName, value, inPrefabMode, 
+                        (val) => property.SetValue(component, val));
                 }
 
-                var field = type.GetField(propertyName);
+                // Then try to find as a field (including private SerializeFields)
+                var field = type.GetField(propertyName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
                 if (field != null)
                 {
-                    if (value is Newtonsoft.Json.Linq.JArray jArray)
-                    {
-                        if (field.FieldType == typeof(Vector3))
-                        {
-                            var values = jArray.ToObject<float[]>();
-                            if (values.Length >= 3)
-                            {
-                                field.SetValue(component, new Vector3(values[0], values[1], values[2]));
-                                return true;
-                            }
-                        }
-                        else if (field.FieldType == typeof(Color))
-                        {
-                            var values = jArray.ToObject<float[]>();
-                            if (values.Length >= 3)
-                            {
-                                field.SetValue(component, new Color(values[0], values[1], values[2], values.Length > 3 ? values[3] : 1f));
-                                return true;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        var convertedValue = Convert.ChangeType(value, field.FieldType);
-                        field.SetValue(component, convertedValue);
-                        return true;
-                    }
+                    Debug.Log($"Found field '{propertyName}' of type {field.FieldType} on {type.Name} (Access: {field.Attributes})");
+                    return SetPropertyValue(component, field.FieldType, propertyName, value, inPrefabMode,
+                        (val) => field.SetValue(component, val));
                 }
+
+                // If we get here, the property/field was not found
+                var availableFields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Where(f => f.GetCustomAttribute<SerializeField>() != null || f.IsPublic)
+                    .Select(f => $"{f.Name} ({f.FieldType.Name})")
+                    .ToArray();
+                
+                var availableProperties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                    .Where(p => p.CanWrite)
+                    .Select(p => $"{p.Name} ({p.PropertyType.Name})")
+                    .ToArray();
+
+                Debug.LogWarning($"Property/field '{propertyName}' not found on {type.Name}. " +
+                    $"Available serialized fields: [{string.Join(", ", availableFields)}]. " +
+                    $"Available properties: [{string.Join(", ", availableProperties)}]");
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"Failed to set property {propertyName}: {e.Message}");
+                Debug.LogError($"Exception while setting property {propertyName} on {component.GetType().Name}: {e.Message}\n{e.StackTrace}");
             }
 
             return false;
+        }
+
+        private bool SetPropertyValue(UnityEngine.Component component, Type targetType, string propertyName, object value, bool inPrefabMode, Action<object> setValue)
+        {
+            Debug.Log($"Setting property '{propertyName}' of type {targetType.Name} with value '{value}' (type: {value?.GetType().Name})");
+            
+            // Handle Unity object references (Transform, GameObject, Component types)
+            if (value is string stringValue && IsUnityObjectType(targetType))
+            {
+                Debug.Log($"Resolving Unity object reference '{stringValue}' for type {targetType.Name}");
+                var objectReference = ResolveObjectReference(stringValue, targetType, inPrefabMode);
+                if (objectReference != null)
+                {
+                    Debug.Log($"Successfully resolved object '{stringValue}' to {objectReference.GetType().Name}");
+                    setValue(objectReference);
+                    return true;
+                }
+                else
+                {
+                    Debug.LogWarning($"Could not find object '{stringValue}' for property '{propertyName}' of type {targetType.Name}");
+                    return false;
+                }
+            }
+
+            // Handle arrays (Vector3, Color)
+            if (value is Newtonsoft.Json.Linq.JArray jArray)
+            {
+                if (targetType == typeof(Vector3))
+                {
+                    var values = jArray.ToObject<float[]>();
+                    if (values.Length >= 3)
+                    {
+                        setValue(new Vector3(values[0], values[1], values[2]));
+                        return true;
+                    }
+                }
+                else if (targetType == typeof(Color))
+                {
+                    var values = jArray.ToObject<float[]>();
+                    if (values.Length >= 3)
+                    {
+                        setValue(new Color(values[0], values[1], values[2], values.Length > 3 ? values[3] : 1f));
+                        return true;
+                    }
+                }
+            }
+
+            // Handle LayerMask
+            if (targetType == typeof(LayerMask))
+            {
+                if (value is string layerName)
+                {
+                    int layerIndex = LayerMask.NameToLayer(layerName);
+                    if (layerIndex != -1)
+                    {
+                        setValue((LayerMask)(1 << layerIndex));
+                        return true;
+                    }
+                }
+                else if (value is long || value is int)
+                {
+                    setValue((LayerMask)Convert.ToInt32(value));
+                    return true;
+                }
+            }
+
+            // Handle primitive types
+            try
+            {
+                var convertedValue = Convert.ChangeType(value, targetType);
+                setValue(convertedValue);
+                return true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"Failed to convert value for property {propertyName}: {e.Message}");
+                return false;
+            }
+        }
+
+        private bool IsUnityObjectType(Type type)
+        {
+            return typeof(UnityEngine.Object).IsAssignableFrom(type);
+        }
+
+        private struct PropertySetResult
+        {
+            public bool Success;
+            public string ErrorMessage;
+            public string Details;
+
+            public PropertySetResult(bool success, string errorMessage = null, string details = null)
+            {
+                Success = success;
+                ErrorMessage = errorMessage;
+                Details = details;
+            }
+        }
+
+        private PropertySetResult SetComponentPropertyWithDetails(UnityEngine.Component component, string propertyName, object value, bool inPrefabMode = false)
+        {
+            try
+            {
+                var type = component.GetType();
+                var details = new List<string>();
+                
+                // First try to find as a property (public properties)
+                var property = type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+                if (property != null && property.CanWrite)
+                {
+                    details.Add($"Found property '{propertyName}' of type {property.PropertyType} on {type.Name}");
+                    var result = SetPropertyValueWithDetails(component, property.PropertyType, propertyName, value, inPrefabMode, 
+                        (val) => property.SetValue(component, val));
+                    if (result.Success)
+                    {
+                        return new PropertySetResult(true, null, string.Join("; ", details.Concat(new[] { result.Details })));
+                    }
+                    else
+                    {
+                        return new PropertySetResult(false, result.ErrorMessage, string.Join("; ", details.Concat(new[] { result.Details })));
+                    }
+                }
+
+                // Then try to find as a field (including private SerializeFields)
+                var field = type.GetField(propertyName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (field != null)
+                {
+                    details.Add($"Found field '{propertyName}' of type {field.FieldType} on {type.Name} (Access: {field.Attributes})");
+                    var result = SetPropertyValueWithDetails(component, field.FieldType, propertyName, value, inPrefabMode,
+                        (val) => field.SetValue(component, val));
+                    if (result.Success)
+                    {
+                        return new PropertySetResult(true, null, string.Join("; ", details.Concat(new[] { result.Details })));
+                    }
+                    else
+                    {
+                        return new PropertySetResult(false, result.ErrorMessage, string.Join("; ", details.Concat(new[] { result.Details })));
+                    }
+                }
+
+                // If we get here, the property/field was not found
+                var availableFields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Where(f => f.GetCustomAttribute<SerializeField>() != null || f.IsPublic)
+                    .Select(f => $"{f.Name} ({f.FieldType.Name})")
+                    .ToArray();
+                
+                var availableProperties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                    .Where(p => p.CanWrite)
+                    .Select(p => $"{p.Name} ({p.PropertyType.Name})")
+                    .ToArray();
+
+                var errorMsg = $"Property/field '{propertyName}' not found on {type.Name}. " +
+                    $"Available serialized fields: [{string.Join(", ", availableFields)}]. " +
+                    $"Available properties: [{string.Join(", ", availableProperties)}]";
+
+                return new PropertySetResult(false, errorMsg);
+            }
+            catch (Exception e)
+            {
+                var errorMsg = $"Exception while setting property {propertyName} on {component.GetType().Name}: {e.Message}";
+                return new PropertySetResult(false, errorMsg, e.StackTrace);
+            }
+        }
+
+        private PropertySetResult SetPropertyValueWithDetails(UnityEngine.Component component, Type targetType, string propertyName, object value, bool inPrefabMode, Action<object> setValue)
+        {
+            var details = new List<string>();
+            details.Add($"Setting property '{propertyName}' of type {targetType.Name} with value '{value}' (type: {value?.GetType().Name})");
+            
+            // Handle Unity object references (Transform, GameObject, Component types)
+            if (value is string stringValue && IsUnityObjectType(targetType))
+            {
+                details.Add($"Resolving Unity object reference '{stringValue}' for type {targetType.Name}");
+                var objectReference = ResolveObjectReference(stringValue, targetType, inPrefabMode);
+                if (objectReference != null)
+                {
+                    details.Add($"Successfully resolved object '{stringValue}' to {objectReference.GetType().Name}");
+                    setValue(objectReference);
+                    return new PropertySetResult(true, null, string.Join("; ", details));
+                }
+                else
+                {
+                    var errorMsg = $"Could not find object '{stringValue}' for property '{propertyName}' of type {targetType.Name}";
+                    return new PropertySetResult(false, errorMsg, string.Join("; ", details));
+                }
+            }
+
+            // Handle arrays (Vector3, Color)
+            if (value is Newtonsoft.Json.Linq.JArray jArray)
+            {
+                if (targetType == typeof(Vector3))
+                {
+                    var values = jArray.ToObject<float[]>();
+                    if (values.Length >= 3)
+                    {
+                        setValue(new Vector3(values[0], values[1], values[2]));
+                        details.Add($"Set Vector3 value ({values[0]}, {values[1]}, {values[2]})");
+                        return new PropertySetResult(true, null, string.Join("; ", details));
+                    }
+                }
+                else if (targetType == typeof(Color))
+                {
+                    var values = jArray.ToObject<float[]>();
+                    if (values.Length >= 3)
+                    {
+                        setValue(new Color(values[0], values[1], values[2], values.Length > 3 ? values[3] : 1f));
+                        details.Add($"Set Color value ({values[0]}, {values[1]}, {values[2]}, {(values.Length > 3 ? values[3] : 1f)})");
+                        return new PropertySetResult(true, null, string.Join("; ", details));
+                    }
+                }
+            }
+
+            // Handle LayerMask
+            if (targetType == typeof(LayerMask))
+            {
+                if (value is string layerName)
+                {
+                    int layerIndex = LayerMask.NameToLayer(layerName);
+                    if (layerIndex != -1)
+                    {
+                        setValue((LayerMask)(1 << layerIndex));
+                        details.Add($"Set LayerMask for layer '{layerName}' (index {layerIndex})");
+                        return new PropertySetResult(true, null, string.Join("; ", details));
+                    }
+                    else
+                    {
+                        var errorMsg = $"Layer '{layerName}' not found";
+                        return new PropertySetResult(false, errorMsg, string.Join("; ", details));
+                    }
+                }
+                else if (value is long || value is int)
+                {
+                    setValue((LayerMask)Convert.ToInt32(value));
+                    details.Add($"Set LayerMask to value {value}");
+                    return new PropertySetResult(true, null, string.Join("; ", details));
+                }
+            }
+
+            // Handle primitive types
+            try
+            {
+                var convertedValue = Convert.ChangeType(value, targetType);
+                setValue(convertedValue);
+                details.Add($"Set {targetType.Name} value to {convertedValue}");
+                return new PropertySetResult(true, null, string.Join("; ", details));
+            }
+            catch (Exception e)
+            {
+                var errorMsg = $"Failed to convert value '{value}' to type {targetType.Name}: {e.Message}";
+                return new PropertySetResult(false, errorMsg, string.Join("; ", details));
+            }
         }
 
         private GameObject FindGameObjectInContext(string objectName, bool inPrefabMode)
@@ -842,6 +1078,32 @@ namespace UnityNaturalMCPExtesion.Editor
             {
                 return GameObject.Find(objectName);
             }
+        }
+
+        private UnityEngine.Object ResolveObjectReference(string objectName, Type targetType, bool inPrefabMode)
+        {
+            if (string.IsNullOrEmpty(objectName))
+                return null;
+
+            var gameObject = FindGameObjectInContext(objectName, inPrefabMode);
+            if (gameObject == null)
+                return null;
+
+            // Handle different Unity object types
+            if (targetType == typeof(GameObject))
+            {
+                return gameObject;
+            }
+            else if (targetType == typeof(Transform))
+            {
+                return gameObject.transform;
+            }
+            else if (typeof(UnityEngine.Component).IsAssignableFrom(targetType))
+            {
+                return gameObject.GetComponent(targetType);
+            }
+
+            return null;
         }
     }
 }
