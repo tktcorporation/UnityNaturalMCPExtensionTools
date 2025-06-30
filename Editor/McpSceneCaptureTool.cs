@@ -459,7 +459,7 @@ namespace UnityNaturalMCPExtension.Editor
 
                             // Simplified size calculation for UI elements
                             // Use a reasonable size based on capture dimensions
-                            float uiSize = Mathf.Max(width, height) * 0.5f; // Half of the larger dimension
+                            float uiSize = Mathf.Max(width, height) * 0.2f; // Half of the larger dimension
                             sceneView.size = uiSize;
 
                             Debug.Log($"[CapturePrefabView] UI Canvas Position - Canvas={canvasWorldCenter}, Pivot={sceneView.pivot}, Size={sceneView.size}, Capture Size={width}x{height}");
@@ -645,25 +645,34 @@ namespace UnityNaturalMCPExtension.Editor
 
         /// <summary>
         /// Prefab モード中の Screen Space – Overlay Canvas の中心を
-        /// SceneView カメラ基準のワールド座標で返します。
+        /// 一時的なGameObjectを配置して取得したワールド座標で返します。
         /// </summary>
         private static Vector3 GetOverlayCanvasCenterWorld(Canvas canvas)
         {
-            // ① Canvas の中心 (UI 座標) を求める
-            RectTransform rt = canvas.transform as RectTransform;
-            Vector3 uiCenter = new(rt.rect.width * 0.5f, rt.rect.height * 0.5f, 0f);
+            return new Vector3(1920f / 4, 1080f / 4, 0f);
 
-#if UNITY_EDITOR
-            // ② SceneView カメラで UI → ワールドへ変換
-            SceneView sv = SceneView.lastActiveSceneView;
-            if (sv != null && sv.camera != null)
-            {
-                return sv.camera.ScreenToWorldPoint(uiCenter);
-            }
-#endif
-            // 実行時は任意のカメラを使って同様に変換する
-            Camera cam = Camera.main;
-            return cam ? cam.ScreenToWorldPoint(uiCenter) : Vector3.zero;
+            // // ① Canvas の中心 (UI 座標) を求める
+            // RectTransform rt = canvas.transform as RectTransform;
+            // Vector3 uiCenter = new(rt.rect.width * 0.5f, rt.rect.height * 0.5f, 0f);
+
+            // // ② Canvas中心位置に空のGameObjectを一時的に配置
+            // var tempGameObject = new GameObject("TempCanvasCenter");
+            // tempGameObject.transform.SetParent(canvas.transform, false);
+
+            // // RectTransformとして設定してCanvas中心に配置
+            // var tempRectTransform = tempGameObject.AddComponent<RectTransform>();
+            // tempRectTransform.anchoredPosition = new Vector2(uiCenter.x, uiCenter.y);
+            // tempRectTransform.anchorMin = Vector2.zero;
+            // tempRectTransform.anchorMax = Vector2.zero;
+
+            // // ③ 配置したGameObjectのワールド座標を記憶
+            // Vector3 worldPosition = tempGameObject.transform.position;
+
+            // // ④ 配置したGameObjectを削除
+            // GameObject.DestroyImmediate(tempGameObject);
+
+            // // ⑤ 記憶したワールド座標を返却
+            // return worldPosition;
         }
     }
 }
