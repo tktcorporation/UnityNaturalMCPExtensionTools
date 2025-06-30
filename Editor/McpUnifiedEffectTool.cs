@@ -7,6 +7,7 @@ using UnityEditor;
 using UnityEngine;
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using UnityEditor.SceneManagement;
 
 namespace UnityNaturalMCPExtension.Editor
 {
@@ -31,17 +32,53 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Velocity over lifetime settings as JSON (optional)")]
             string velocitySettings = null,
             [Description("Name for new particle system (optional, defaults to 'Particle System')")]
-            string particleSystemName = null)
+            string particleSystemName = null,
+            [Description("Configure in Prefab mode context instead of scene (optional, default: false)")]
+            bool inPrefabMode = false)
         {
             try
             {
                 await UniTask.SwitchToMainThread();
 
-                var gameObject = GameObject.Find(objectName);
-                if (gameObject == null)
-                    return $"Error: GameObject '{objectName}' not found";
+                // Check if we're in Prefab mode when requested
+                if (inPrefabMode)
+                {
+                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                    if (prefabStage == null)
+                        return "Error: Prefab mode is not active. Please open a prefab first.";
+                }
 
-                var particleSystem = FindParticleSystem(objectName);
+                // Find the GameObject using the appropriate method
+                GameObject gameObject = null;
+                if (inPrefabMode)
+                {
+                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                    var root = prefabStage.prefabContentsRoot;
+                    if (root.name == objectName)
+                    {
+                        gameObject = root;
+                    }
+                    else
+                    {
+                        foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+                        {
+                            if (child.name == objectName)
+                            {
+                                gameObject = child.gameObject;
+                                break;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    gameObject = GameObject.Find(objectName);
+                }
+                
+                if (gameObject == null)
+                    return $"Error: GameObject '{objectName}' not found{(inPrefabMode ? " in Prefab mode" : " in scene")}";
+
+                var particleSystem = FindParticleSystem(objectName, inPrefabMode);
 
                 if (particleSystem == null && createNew)
                 {
@@ -281,15 +318,25 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Name of the GameObject containing the particle system")]
             string objectName,
             [Description("Action to perform: 'play' or 'stop'")]
-            string action)
+            string action,
+            [Description("Control in Prefab mode context instead of scene (optional, default: false)")]
+            bool inPrefabMode = false)
         {
             try
             {
                 await UniTask.SwitchToMainThread();
 
-                var particleSystem = FindParticleSystem(objectName);
+                // Check if we're in Prefab mode when requested
+                if (inPrefabMode)
+                {
+                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                    if (prefabStage == null)
+                        return "Error: Prefab mode is not active. Please open a prefab first.";
+                }
+
+                var particleSystem = FindParticleSystem(objectName, inPrefabMode);
                 if (particleSystem == null)
-                    return $"Error: No ParticleSystem found on GameObject '{objectName}'";
+                    return $"Error: No ParticleSystem found on GameObject '{objectName}'{(inPrefabMode ? " in Prefab mode" : " in scene")}";
 
                 switch (action?.ToLower())
                 {
@@ -317,15 +364,25 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Name of the GameObject containing the particle system")]
             string objectName,
             [Description("Include detailed module information (optional, default: true)")]
-            bool includeModuleDetails = true)
+            bool includeModuleDetails = true,
+            [Description("Get info from Prefab mode context instead of scene (optional, default: false)")]
+            bool inPrefabMode = false)
         {
             try
             {
                 await UniTask.SwitchToMainThread();
 
-                var particleSystem = FindParticleSystem(objectName);
+                // Check if we're in Prefab mode when requested
+                if (inPrefabMode)
+                {
+                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                    if (prefabStage == null)
+                        return "Error: Prefab mode is not active. Please open a prefab first.";
+                }
+
+                var particleSystem = FindParticleSystem(objectName, inPrefabMode);
                 if (particleSystem == null)
-                    return $"Error: No ParticleSystem found on GameObject '{objectName}'";
+                    return $"Error: No ParticleSystem found on GameObject '{objectName}'{(inPrefabMode ? " in Prefab mode" : " in scene")}";
 
                 var info = new Dictionary<string, object>();
                 info["objectName"] = objectName;
@@ -726,9 +783,42 @@ namespace UnityNaturalMCPExtension.Editor
             return result;
         }
 
-        private ParticleSystem FindParticleSystem(string objectName)
+        private ParticleSystem FindParticleSystem(string objectName, bool inPrefabMode = false)
         {
-            var gameObject = GameObject.Find(objectName);
+            GameObject gameObject = null;
+            
+            if (inPrefabMode)
+            {
+                var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                if (prefabStage == null)
+                {
+                    Debug.LogError("Prefab mode is not active");
+                    return null;
+                }
+
+                var root = prefabStage.prefabContentsRoot;
+                if (root.name == objectName)
+                {
+                    gameObject = root;
+                }
+                else
+                {
+                    // Search in children
+                    foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+                    {
+                        if (child.name == objectName)
+                        {
+                            gameObject = child.gameObject;
+                            break;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                gameObject = GameObject.Find(objectName);
+            }
+            
             if (gameObject == null)
                 return null;
 
