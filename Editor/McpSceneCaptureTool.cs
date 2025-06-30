@@ -275,7 +275,9 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Capture height in pixels (optional, default: 1080)")]
             int height = 1080,
             [Description("Camera distance from prefab when captureFromFront is true (optional, default: 5.0)")]
-            float cameraDistance = 5.0f)
+            float cameraDistance = 5.0f,
+            [Description("Treat as UI object (optional, null=auto-detect, true=UI, false=3D)")]
+            bool? isUIObject = null)
         {
             try
             {
@@ -323,8 +325,32 @@ namespace UnityNaturalMCPExtension.Editor
                         // Calculate bounds of the prefab
                         Bounds bounds = new Bounds(Vector3.zero, Vector3.zero);
                         bool boundsInitialized = false;
+                        bool isUI = false;
 
-                        // Get all renderers in the prefab
+                        // Determine if this is a UI object
+                        Canvas canvas = null;
+                        if (isUIObject.HasValue)
+                        {
+                            // Use explicitly specified value
+                            isUI = isUIObject.Value;
+                            if (isUI)
+                            {
+                                canvas = prefabRoot.GetComponentInParent<Canvas>() ?? prefabRoot.GetComponent<Canvas>();
+                            }
+                        }
+                        else
+                        {
+                            // Auto-detect: Check if this is a UI object by looking for Canvas component
+                            canvas = prefabRoot.GetComponentInParent<Canvas>();
+                            if (canvas == null)
+                            {
+                                canvas = prefabRoot.GetComponent<Canvas>();
+                            }
+                            // Also check for RectTransform as a primary indicator
+                            isUI = canvas != null || prefabRoot.GetComponent<RectTransform>() != null;
+                        }
+                        
+                        // Get all renderers in the prefab (for 3D objects)
                         var renderers = prefabRoot.GetComponentsInChildren<Renderer>();
                         foreach (var renderer in renderers)
                         {
@@ -343,29 +369,118 @@ namespace UnityNaturalMCPExtension.Editor
                         if (!boundsInitialized)
                         {
                             var rectTransforms = prefabRoot.GetComponentsInChildren<RectTransform>();
-                            foreach (var rectTransform in rectTransforms)
+                            if (rectTransforms.Length > 0)
                             {
-                                Vector3[] corners = new Vector3[4];
-                                rectTransform.GetWorldCorners(corners);
-                                foreach (var corner in corners)
+                                // For UI objects, calculate bounds more reliably
+                                // Use local bounds and transform to world space manually
+                                foreach (var rectTransform in rectTransforms)
                                 {
-                                    if (!boundsInitialized)
+                                    if (rectTransform == null) continue;
+
+                                    // Get rect dimensions
+                                    Rect rect = rectTransform.rect;
+                                    if (rect.width == 0 && rect.height == 0) continue;
+
+                                    // Calculate world-space corners manually
+                                    Vector3[] localCorners = new Vector3[4];
+                                    localCorners[0] = new Vector3(rect.xMin, rect.yMin, 0); // Bottom-left
+                                    localCorners[1] = new Vector3(rect.xMin, rect.yMax, 0); // Top-left
+                                    localCorners[2] = new Vector3(rect.xMax, rect.yMax, 0); // Top-right
+                                    localCorners[3] = new Vector3(rect.xMax, rect.yMin, 0); // Bottom-right
+
+                                    // Transform to world space
+                                    for (int i = 0; i < 4; i++)
                                     {
-                                        bounds = new Bounds(corner, Vector3.zero);
-                                        boundsInitialized = true;
+                                        Vector3 worldCorner = rectTransform.TransformPoint(localCorners[i]);
+                                        
+                                        if (!boundsInitialized)
+                                        {
+                                            bounds = new Bounds(worldCorner, Vector3.zero);
+                                            boundsInitialized = true;
+                                        }
+                                        else
+                                        {
+                                            bounds.Encapsulate(worldCorner);
+                                        }
                                     }
-                                    else
-                                    {
-                                        bounds.Encapsulate(corner);
-                                    }
+                                }
+                                
+                                // If bounds are still too small, expand them
+                                if (boundsInitialized && bounds.size.magnitude < 1f)
+                                {
+                                    bounds.Expand(1f);
                                 }
                             }
                         }
 
+                        // If still no bounds, create default bounds
+                        if (!boundsInitialized)
+                        {
+                            bounds = new Bounds(prefabRoot.transform.position, Vector3.one);
+                        }
+                        
+                        // Debug logging for bounds calculation
+                        Debug.Log($"[CapturePrefabView] Calculated bounds: Center={bounds.center}, Size={bounds.size}, IsUI={isUI}");
+
                         // Set camera to front view
                         sceneView.pivot = bounds.center;
-                        sceneView.rotation = Quaternion.Euler(0, 180, 0); // Front view
-                        sceneView.size = Mathf.Max(bounds.size.x, bounds.size.y) * 0.5f + cameraDistance;
+                        if (isUI)
+                        {
+                            // For UI objects, use front view without rotation (UI faces camera by default)
+                            sceneView.rotation = Quaternion.identity; // Front view for UI
+                        }
+                        else
+                        {
+                            // For 3D objects, use 180 degree rotation for front view
+                            sceneView.rotation = Quaternion.Euler(0, 180, 0); // Front view for 3D
+                        }
+                        
+                        // Calculate appropriate camera distance
+                        float requiredFieldOfView = 60f; // Standard FOV
+                        float halfFOV = requiredFieldOfView * 0.5f * Mathf.Deg2Rad;
+                        
+                        if (isUI)
+                        {
+                            // For UI objects, use Canvas position as camera target
+                            Vector3 canvasPosition = Vector3.zero;
+                            
+                            // Get Canvas position, fallback to prefab root position
+                            if (canvas != null)
+                            {
+                                canvasPosition = canvas.transform.position;
+                            }
+                            else
+                            {
+                                canvasPosition = prefabRoot.transform.position;
+                            }
+                            
+                            // Set SceneView pivot to Canvas X,Y position with closer Z distance
+                            float closeZDistance = 10.0f; // Much closer distance for UI
+                            sceneView.pivot = new Vector3(canvasPosition.x, canvasPosition.y, canvasPosition.z - closeZDistance);
+                            
+                            // Simplified size calculation for UI elements
+                            // Use a reasonable size based on capture dimensions
+                            float uiSize = Mathf.Max(width, height) * 0.5f; // Half of the larger dimension
+                            sceneView.size = uiSize;
+                            
+                            Debug.Log($"[CapturePrefabView] UI Canvas Position - Canvas={canvasPosition}, Pivot={sceneView.pivot}, Size={sceneView.size}, Capture Size={width}x{height}");
+                        }
+                        else
+                        {
+                            // For 3D objects, calculate distance based on object size and desired FOV
+                            float objectRadius = bounds.size.magnitude * 0.5f;
+                            float distance = objectRadius / Mathf.Tan(halfFOV);
+                            
+                            // The size parameter in SceneView represents half the height of the view
+                            // Calculate it to ensure the entire object fits with padding
+                            sceneView.size = objectRadius * 1.2f; // 20% padding
+                        }
+                        
+                        // Apply additional camera distance if specified
+                        if (cameraDistance > 0)
+                        {
+                            sceneView.size += cameraDistance;
+                        }
                     }
                     else
                     {
@@ -383,6 +498,63 @@ namespace UnityNaturalMCPExtension.Editor
                         }
                     }
 
+                    // Apply framing logic based on object type
+                    Selection.activeGameObject = prefabRoot;
+                    
+                    // Check if this is a UI object for proper framing
+                    bool isUIForFraming = false;
+                    Canvas frameCanvas = null;
+                    if (isUIObject.HasValue)
+                    {
+                        isUIForFraming = isUIObject.Value;
+                        if (isUIForFraming)
+                        {
+                            frameCanvas = prefabRoot.GetComponentInParent<Canvas>() ?? prefabRoot.GetComponent<Canvas>();
+                        }
+                    }
+                    else
+                    {
+                        frameCanvas = prefabRoot.GetComponentInParent<Canvas>() ?? prefabRoot.GetComponent<Canvas>();
+                        isUIForFraming = frameCanvas != null || prefabRoot.GetComponent<RectTransform>() != null;
+                    }
+                    
+                    if (isUIForFraming)
+                    {
+                        // For UI objects, don't use FrameSelected and keep fixed position settings
+                        // Always use front view for UI (camera looking down negative Z axis)
+                        sceneView.rotation = Quaternion.identity; // Front view for UI
+                        
+                        // Ensure pivot uses Canvas position for UI capture
+                        if (captureFromFront)
+                        {
+                            Vector3 canvasPosition = Vector3.zero;
+                            if (frameCanvas != null)
+                            {
+                                canvasPosition = frameCanvas.transform.position;
+                            }
+                            else
+                            {
+                                canvasPosition = prefabRoot.transform.position;
+                            }
+                            
+                            float closeZDistance = 10.0f;
+                            sceneView.pivot = new Vector3(canvasPosition.x, canvasPosition.y, canvasPosition.z - closeZDistance);
+                        }
+                        
+                        Debug.Log($"[CapturePrefabView] UI Frame Settings - Pivot={sceneView.pivot}, Rotation={sceneView.rotation.eulerAngles}");
+                    }
+                    else
+                    {
+                        // Use FrameSelected for 3D objects or when not using front capture
+                        sceneView.FrameSelected();
+                        
+                        // Override rotation for front view if needed for 3D objects
+                        if (captureFromFront && !isUIForFraming)
+                        {
+                            sceneView.rotation = Quaternion.Euler(0, 180, 0); // Front view for 3D
+                        }
+                    }
+                    
                     // Force repaint
                     sceneView.Repaint();
 
