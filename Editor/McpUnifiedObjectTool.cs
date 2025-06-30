@@ -440,7 +440,17 @@ namespace UnityNaturalMCPExtension.Editor
 
                         foreach (var prop in propsDict)
                         {
-                            var result = SetComponentPropertyWithDetails(component, prop.Key, prop.Value, inPrefabMode);
+                            // Check if this is a nested property (contains dot notation)
+                            PropertySetResult result;
+                            if (prop.Key.Contains("."))
+                            {
+                                result = SetNestedPropertyWithDetails(component, prop.Key, prop.Value, inPrefabMode);
+                            }
+                            else
+                            {
+                                result = SetComponentPropertyWithDetails(component, prop.Key, prop.Value, inPrefabMode);
+                            }
+                            
                             if (result.Success)
                             {
                                 changes.Add($"{prop.Key}: {prop.Value}");
@@ -1007,6 +1017,96 @@ namespace UnityNaturalMCPExtension.Editor
             }
         }
 
+        private PropertySetResult SetNestedPropertyWithDetails(UnityEngine.Component component, string propertyPath, object value, bool inPrefabMode = false)
+        {
+            try
+            {
+                var type = component.GetType();
+                var details = new List<string>();
+                
+                // Parse the property path (e.g., "config.bobSpeed" -> ["config", "bobSpeed"])
+                var pathParts = propertyPath.Split('.');
+                if (pathParts.Length < 2)
+                {
+                    return new PropertySetResult(false, $"Invalid nested property path: '{propertyPath}'. Expected format: 'parentField.childField'");
+                }
+                
+                var parentFieldName = pathParts[0];
+                var childFieldName = pathParts[1];
+                
+                details.Add($"Attempting to set nested property '{propertyPath}' on {type.Name}");
+                
+                // Find the parent field (struct field)
+                var parentField = type.GetField(parentFieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (parentField == null)
+                {
+                    var availableFields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                        .Where(f => f.GetCustomAttribute<SerializeField>() != null || f.IsPublic)
+                        .Select(f => f.Name)
+                        .ToArray();
+                    
+                    var errorMsg = $"Parent field '{parentFieldName}' not found on {type.Name}. Available fields: [{string.Join(", ", availableFields)}]";
+                    return new PropertySetResult(false, errorMsg);
+                }
+                
+                details.Add($"Found parent field '{parentFieldName}' of type {parentField.FieldType.Name}");
+                
+                // Check if the parent field is a struct
+                if (!parentField.FieldType.IsValueType || parentField.FieldType.IsPrimitive || parentField.FieldType.IsEnum)
+                {
+                    var errorMsg = $"Parent field '{parentFieldName}' must be a struct, but is {parentField.FieldType.Name}";
+                    return new PropertySetResult(false, errorMsg);
+                }
+                
+                // Get the current value of the struct (this creates a copy due to value type boxing)
+                var structValue = parentField.GetValue(component);
+                if (structValue == null)
+                {
+                    var errorMsg = $"Parent field '{parentFieldName}' is null";
+                    return new PropertySetResult(false, errorMsg);
+                }
+                
+                details.Add($"Retrieved struct value of type {structValue.GetType().Name}");
+                
+                // Find the child field within the struct
+                var structType = structValue.GetType();
+                var childField = structType.GetField(childFieldName, BindingFlags.Public | BindingFlags.Instance);
+                if (childField == null)
+                {
+                    var availableStructFields = structType.GetFields(BindingFlags.Public | BindingFlags.Instance)
+                        .Select(f => f.Name)
+                        .ToArray();
+                    
+                    var errorMsg = $"Child field '{childFieldName}' not found in struct {structType.Name}. Available fields: [{string.Join(", ", availableStructFields)}]";
+                    return new PropertySetResult(false, errorMsg);
+                }
+                
+                details.Add($"Found child field '{childFieldName}' of type {childField.FieldType.Name} in struct");
+                
+                // Convert and set the value on the struct copy
+                var convertedValue = ConvertValueForField(value, childField.FieldType, inPrefabMode, details);
+                if (convertedValue == null && !IsNullableType(childField.FieldType))
+                {
+                    var errorMsg = $"Failed to convert value '{value}' to type {childField.FieldType.Name}";
+                    return new PropertySetResult(false, errorMsg, string.Join("; ", details));
+                }
+                
+                childField.SetValue(structValue, convertedValue);
+                details.Add($"Set {childField.FieldType.Name} value to {convertedValue}");
+                
+                // Set the modified struct back to the component (this is crucial for value types)
+                parentField.SetValue(component, structValue);
+                details.Add($"Updated struct '{parentFieldName}' on component");
+                
+                return new PropertySetResult(true, null, string.Join("; ", details));
+            }
+            catch (Exception e)
+            {
+                var errorMsg = $"Exception while setting nested property {propertyPath} on {component.GetType().Name}: {e.Message}";
+                return new PropertySetResult(false, errorMsg, e.StackTrace);
+            }
+        }
+
         private PropertySetResult SetComponentPropertyWithDetails(UnityEngine.Component component, string propertyName, object value, bool inPrefabMode = false)
         {
             try
@@ -1446,6 +1546,122 @@ namespace UnityNaturalMCPExtension.Editor
                 return $"Array/List (Count: {collection.Count})";
 
             return value.ToString();
+        }
+
+        private object ConvertValueForField(object value, Type targetType, bool inPrefabMode, List<string> details)
+        {
+            try
+            {
+                details.Add($"Converting value '{value}' (type: {value?.GetType().Name}) to {targetType.Name}");
+                
+                // Handle Unity object references
+                if (value is string stringValue && IsUnityObjectType(targetType))
+                {
+                    details.Add($"Resolving Unity object reference '{stringValue}' for type {targetType.Name}");
+                    var objectReference = ResolveObjectReference(stringValue, targetType, inPrefabMode);
+                    if (objectReference != null)
+                    {
+                        details.Add($"Successfully resolved object '{stringValue}' to {objectReference.GetType().Name}");
+                        return objectReference;
+                    }
+                    else
+                    {
+                        details.Add($"Could not find object '{stringValue}' for type {targetType.Name}");
+                        return null;
+                    }
+                }
+                
+                // Handle enums
+                if (targetType.IsEnum)
+                {
+                    if (value is string enumStringValue)
+                    {
+                        if (Enum.TryParse(targetType, enumStringValue, true, out var enumValue))
+                        {
+                            details.Add($"Parsed enum '{enumStringValue}' to {targetType.Name}");
+                            return enumValue;
+                        }
+                        else
+                        {
+                            var enumNames = Enum.GetNames(targetType);
+                            details.Add($"Failed to parse enum '{enumStringValue}'. Valid values: [{string.Join(", ", enumNames)}]");
+                            return null;
+                        }
+                    }
+                    else if (value is int || value is long)
+                    {
+                        var enumValue = Enum.ToObject(targetType, value);
+                        details.Add($"Converted numeric value {value} to enum {targetType.Name}");
+                        return enumValue;
+                    }
+                }
+                
+                // Handle arrays (Vector3, Color)
+                if (value is Newtonsoft.Json.Linq.JArray jArray)
+                {
+                    if (targetType == typeof(Vector3))
+                    {
+                        var values = jArray.ToObject<float[]>();
+                        if (values.Length >= 3)
+                        {
+                            var vector = new Vector3(values[0], values[1], values[2]);
+                            details.Add($"Converted array to Vector3: ({vector.x}, {vector.y}, {vector.z})");
+                            return vector;
+                        }
+                    }
+                    else if (targetType == typeof(Color))
+                    {
+                        var values = jArray.ToObject<float[]>();
+                        if (values.Length >= 3)
+                        {
+                            var color = new Color(values[0], values[1], values[2], values.Length > 3 ? values[3] : 1f);
+                            details.Add($"Converted array to Color: ({color.r}, {color.g}, {color.b}, {color.a})");
+                            return color;
+                        }
+                    }
+                }
+                
+                // Handle LayerMask
+                if (targetType == typeof(LayerMask))
+                {
+                    if (value is string layerName)
+                    {
+                        int layerIndex = LayerMask.NameToLayer(layerName);
+                        if (layerIndex != -1)
+                        {
+                            var layerMask = (LayerMask)(1 << layerIndex);
+                            details.Add($"Converted layer name '{layerName}' to LayerMask (index {layerIndex})");
+                            return layerMask;
+                        }
+                        else
+                        {
+                            details.Add($"Layer '{layerName}' not found");
+                            return null;
+                        }
+                    }
+                    else if (value is int || value is long)
+                    {
+                        var layerMask = (LayerMask)Convert.ToInt32(value);
+                        details.Add($"Converted numeric value {value} to LayerMask");
+                        return layerMask;
+                    }
+                }
+                
+                // Handle primitive types and basic conversions
+                var convertedValue = Convert.ChangeType(value, targetType);
+                details.Add($"Converted to {targetType.Name}: {convertedValue}");
+                return convertedValue;
+            }
+            catch (Exception e)
+            {
+                details.Add($"Conversion failed: {e.Message}");
+                return null;
+            }
+        }
+        
+        private bool IsNullableType(Type type)
+        {
+            return !type.IsValueType || (Nullable.GetUnderlyingType(type) != null);
         }
 
         // Helper method for layer validation (only for GameObject layer setting)
