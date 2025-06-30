@@ -7,6 +7,7 @@ using UnityEditor;
 using UnityEngine;
 using System.IO;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace UnityNaturalMCPExtension.Editor
 {
@@ -440,6 +441,96 @@ namespace UnityNaturalMCPExtension.Editor
                     }
                     currentPath = nextPath;
                 }
+            }
+        }
+
+        [McpServerTool, Description("Get detailed information about a prefab asset including variant status")]
+        public async ValueTask<string> GetPrefabAssetInfo(
+            [Description("Path to the prefab asset (e.g., Assets/Prefabs/MyPrefab.prefab)")]
+            string prefabPath)
+        {
+            try
+            {
+                await UniTask.SwitchToMainThread();
+
+                if (string.IsNullOrEmpty(prefabPath))
+                    return "Error: prefabPath is required";
+
+                if (!File.Exists(prefabPath))
+                    return $"Error: Prefab file '{prefabPath}' does not exist";
+
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                if (prefab == null)
+                    return $"Error: Could not load prefab at '{prefabPath}'";
+
+                var assetType = PrefabUtility.GetPrefabAssetType(prefab);
+                var isVariant = assetType == PrefabAssetType.Variant;
+                
+                var info = new List<string>
+                {
+                    $"Name: {prefab.name}",
+                    $"Path: {prefabPath}",
+                    $"AssetType: {assetType}",
+                    $"IsVariant: {isVariant}"
+                };
+
+                // Get component count
+                var componentCount = prefab.GetComponents<UnityEngine.Component>().Length;
+                info.Add($"ComponentCount: {componentCount}");
+
+                // If it's a variant, get source prefab information
+                if (isVariant)
+                {
+                    try
+                    {
+                        var sourcePrefab = PrefabUtility.GetCorrespondingObjectFromOriginalSource(prefab);
+                        if (sourcePrefab != null)
+                        {
+                            var sourcePath = AssetDatabase.GetAssetPath(sourcePrefab);
+                            info.Add($"SourcePrefabPath: {sourcePath}");
+                            info.Add($"SourcePrefabName: {sourcePrefab.name}");
+                        }
+                        else
+                        {
+                            info.Add("SourcePrefabPath: [Unable to determine]");
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        info.Add($"SourcePrefabPath: [Error: {e.Message}]");
+                    }
+                }
+
+                // Get file size information
+                var fileInfo = new FileInfo(prefabPath);
+                info.Add($"FileSize: {fileInfo.Length} bytes");
+                info.Add($"LastModified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}");
+
+                // Get dependencies
+                var dependencies = AssetDatabase.GetDependencies(prefabPath, false);
+                var dependencyCount = dependencies.Length - 1; // Exclude self
+                info.Add($"DependencyCount: {dependencyCount}");
+
+                if (dependencyCount > 0)
+                {
+                    var dependencyList = dependencies
+                        .Where(dep => dep != prefabPath)
+                        .Take(5) // Show first 5 dependencies
+                        .Select(dep => $"  - {dep}");
+                    
+                    info.Add("Dependencies (first 5):");
+                    info.AddRange(dependencyList);
+                    
+                    if (dependencyCount > 5)
+                        info.Add($"  ... and {dependencyCount - 5} more");
+                }
+
+                return string.Join("\n", info);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Error getting prefab asset info: {e}");
+                return $"Error getting prefab asset info: {e.Message}";
             }
         }
     }
