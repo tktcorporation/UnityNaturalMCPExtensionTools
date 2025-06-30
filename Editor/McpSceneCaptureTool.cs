@@ -262,7 +262,7 @@ namespace UnityNaturalMCPExtension.Editor
             }
         }
 
-        [McpServerTool, Description("Capture UI Prefab in Prefab Mode and save as PNG")]
+        [McpServerTool, Description("Capture UI Prefab in Prefab Mode and save as PNG. After capturing, Prefab mode will be closed without saving changes.")]
         public async ValueTask<string> CapturePrefabView(
             [Description("Path to the prefab asset to capture")]
             string prefabPath,
@@ -599,11 +599,11 @@ namespace UnityNaturalMCPExtension.Editor
                     {
                         // Configure camera for clean background
                         camera.targetTexture = renderTexture;
-                        
+
                         // Set clear flags and background color for both UI and 3D objects
                         camera.clearFlags = CameraClearFlags.SolidColor;
                         camera.backgroundColor = new Color(0.125f, 0.224f, 0.322f, 1f); // Custom background color
-                        
+
                         camera.Render();
 
                         // Create Texture2D and read pixels
@@ -776,7 +776,6 @@ namespace UnityNaturalMCPExtension.Editor
         /// <returns>作成されたGameObject</returns>
         private static GameObject CreateBorderImage(Canvas canvas, string name, float width, float height, Vector2 position, Color color)
         {
-            Debug.LogError($"[CreateBorderImage] Creating border image: {name}, Size: {width}x{height}, Position: {position}, Color: {color}");
             var borderObj = new GameObject(name);
             borderObj.transform.SetParent(canvas.transform, false);
 
