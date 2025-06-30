@@ -445,9 +445,9 @@ namespace UnityNaturalMCPExtension.Editor
                         ["arc"] = shape.arc,
                         ["arcMode"] = shape.arcMode.ToString(),
                         ["arcSpread"] = shape.arcSpread,
-                        ["rotation"] = shape.rotation,
-                        ["scale"] = shape.scale,
-                        ["position"] = shape.position,
+                        ["rotation"] = Vector3ToArray(shape.rotation),
+                        ["scale"] = Vector3ToArray(shape.scale),
+                        ["position"] = Vector3ToArray(shape.position),
                         ["alignToDirection"] = shape.alignToDirection,
                         ["randomDirectionAmount"] = shape.randomDirectionAmount,
                         ["sphericalDirectionAmount"] = shape.sphericalDirectionAmount
@@ -708,9 +708,9 @@ namespace UnityNaturalMCPExtension.Editor
                             ["minParticleSize"] = renderer.minParticleSize,
                             ["maxParticleSize"] = renderer.maxParticleSize,
                             ["alignment"] = renderer.alignment.ToString(),
-                            ["flip"] = renderer.flip,
+                            ["flip"] = Vector3ToArray(renderer.flip),
                             ["allowRoll"] = renderer.allowRoll,
-                            ["pivot"] = renderer.pivot,
+                            ["pivot"] = Vector3ToArray(renderer.pivot),
                             ["maskInteraction"] = renderer.maskInteraction.ToString(),
                             ["enableGPUInstancing"] = renderer.enableGPUInstancing,
                             ["shadowCastingMode"] = renderer.shadowCastingMode.ToString(),
@@ -794,6 +794,16 @@ namespace UnityNaturalMCPExtension.Editor
             }
 
             return result;
+        }
+
+        private object Vector3ToArray(Vector3 v)
+        {
+            return new float[] { v.x, v.y, v.z };
+        }
+
+        private object Vector2ToArray(Vector2 v)
+        {
+            return new float[] { v.x, v.y };
         }
 
         private ParticleSystem FindParticleSystem(string objectName, bool inPrefabMode = false)
