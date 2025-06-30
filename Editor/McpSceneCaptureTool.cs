@@ -585,11 +585,18 @@ namespace UnityNaturalMCPExtension.Editor
                     // Store original camera settings
                     var originalTargetTexture = camera.targetTexture;
                     var originalCullingMask = camera.cullingMask;
+                    var originalClearFlags = camera.clearFlags;
+                    var originalBackgroundColor = camera.backgroundColor;
 
                     try
                     {
-                        // Render to texture
+                        // Configure camera for clean background
                         camera.targetTexture = renderTexture;
+                        
+                        // Set clear flags and background color for both UI and 3D objects
+                        camera.clearFlags = CameraClearFlags.SolidColor;
+                        camera.backgroundColor = new Color(0.125f, 0.224f, 0.322f, 1f); // Custom background color
+                        
                         camera.Render();
 
                         // Create Texture2D and read pixels
@@ -632,6 +639,8 @@ namespace UnityNaturalMCPExtension.Editor
                         // Restore camera settings
                         camera.targetTexture = originalTargetTexture;
                         camera.cullingMask = originalCullingMask;
+                        camera.clearFlags = originalClearFlags;
+                        camera.backgroundColor = originalBackgroundColor;
                         RenderTexture.active = null;
                         GameObject.DestroyImmediate(renderTexture);
                     }
