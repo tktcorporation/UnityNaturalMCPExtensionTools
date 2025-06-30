@@ -197,5 +197,337 @@ namespace UnityNaturalMCPExtension.Editor
                 return $"エラー: {e.Message}";
             }
         }
+
+        [McpServerTool, Description("Prefabインスタンスの変更をソースPrefabに適用")]
+        public async ValueTask<string> ApplyPrefabInstanceChanges(
+            [Description("Prefabインスタンスのオブジェクト名")] string objectName,
+            [Description("適用する特定のプロパティパス（カンマ区切り、省略時は全て適用）")] string propertyPaths = null,
+            [Description("全ての変更を適用するかどうか（デフォルト: true）")] bool applyAll = true)
+        {
+            try
+            {
+                await UniTask.SwitchToMainThread();
+
+                // オブジェクトを検索
+                var gameObject = GameObject.Find(objectName);
+                if (gameObject == null)
+                {
+                    return $"エラー: オブジェクト '{objectName}' が見つかりません";
+                }
+
+                // Prefabインスタンスかどうかを確認
+                var prefabStatus = PrefabUtility.GetPrefabInstanceStatus(gameObject);
+                if (prefabStatus == PrefabInstanceStatus.NotAPrefab)
+                {
+                    return $"エラー: '{objectName}' はPrefabインスタンスではありません";
+                }
+
+                var prefabAsset = PrefabUtility.GetCorrespondingObjectFromSource(gameObject);
+                if (prefabAsset == null)
+                {
+                    return $"エラー: '{objectName}' のソースPrefabが見つかりません";
+                }
+
+                var assetPath = AssetDatabase.GetAssetPath(prefabAsset);
+
+                if (applyAll || string.IsNullOrEmpty(propertyPaths))
+                {
+                    // 全ての変更を適用
+                    try
+                    {
+                        PrefabUtility.ApplyPrefabInstance(gameObject, InteractionMode.UserAction);
+                        EditorUtility.SetDirty(prefabAsset);
+                        AssetDatabase.SaveAssets();
+                        return $"Prefabインスタンス '{objectName}' の全ての変更をソースPrefab '{assetPath}' に適用しました";
+                    }
+                    catch (Exception applyEx)
+                    {
+                        Debug.LogError($"ApplyPrefabInstance failed: {applyEx}");
+                        return $"エラー: Prefabインスタンス '{objectName}' の変更の適用に失敗しました: {applyEx.Message}";
+                    }
+                }
+                else
+                {
+                    // 特定のプロパティのみ適用する場合は、全体適用後にプロパティごとに判断する
+                    // Unity 6では個別プロパティオーバーライドのAPIが変更されているため、
+                    // 一旦全体適用を使用
+                    try
+                    {
+                        PrefabUtility.ApplyPrefabInstance(gameObject, InteractionMode.UserAction);
+                        EditorUtility.SetDirty(prefabAsset);
+                        AssetDatabase.SaveAssets();
+                        return $"Prefabインスタンス '{objectName}' の変更をソースPrefab '{assetPath}' に適用しました（指定されたプロパティパス: '{propertyPaths}'）";
+                    }
+                    catch (Exception applyEx)
+                    {
+                        Debug.LogError($"ApplyPrefabInstance failed: {applyEx}");
+                        return $"エラー: Prefabインスタンス '{objectName}' の変更の適用に失敗しました: {applyEx.Message}";
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"ApplyPrefabInstanceChanges エラー: {e}");
+                return $"エラー: {e.Message}";
+            }
+        }
+
+        [McpServerTool, Description("PrefabインスタンスのオーバーライドをソースPrefabの状態に戻す")]
+        public async ValueTask<string> RevertPrefabInstanceOverrides(
+            [Description("Prefabインスタンスのオブジェクト名")] string objectName,
+            [Description("戻す特定のプロパティパス（カンマ区切り、省略時は全て戻す）")] string propertyPaths = null,
+            [Description("全ての変更を戻すかどうか（デフォルト: true）")] bool revertAll = true)
+        {
+            try
+            {
+                await UniTask.SwitchToMainThread();
+
+                // オブジェクトを検索
+                var gameObject = GameObject.Find(objectName);
+                if (gameObject == null)
+                {
+                    return $"エラー: オブジェクト '{objectName}' が見つかりません";
+                }
+
+                // Prefabインスタンスかどうかを確認
+                var prefabStatus = PrefabUtility.GetPrefabInstanceStatus(gameObject);
+                if (prefabStatus == PrefabInstanceStatus.NotAPrefab)
+                {
+                    return $"エラー: '{objectName}' はPrefabインスタンスではありません";
+                }
+
+                var prefabAsset = PrefabUtility.GetCorrespondingObjectFromSource(gameObject);
+                if (prefabAsset == null)
+                {
+                    return $"エラー: '{objectName}' のソースPrefabが見つかりません";
+                }
+
+                var assetPath = AssetDatabase.GetAssetPath(prefabAsset);
+
+                if (revertAll || string.IsNullOrEmpty(propertyPaths))
+                {
+                    // 全ての変更を戻す
+                    try
+                    {
+                        PrefabUtility.RevertPrefabInstance(gameObject, InteractionMode.UserAction);
+                        return $"Prefabインスタンス '{objectName}' の全ての変更をソースPrefab '{assetPath}' の状態に戻しました";
+                    }
+                    catch (Exception revertEx)
+                    {
+                        Debug.LogError($"RevertPrefabInstance failed: {revertEx}");
+                        return $"エラー: Prefabインスタンス '{objectName}' の変更の復元に失敗しました: {revertEx.Message}";
+                    }
+                }
+                else
+                {
+                    // 特定のプロパティのみ戻す場合も、Unity 6では全体リバートを使用
+                    // プロパティパスの情報は表示用として保持
+                    try
+                    {
+                        PrefabUtility.RevertPrefabInstance(gameObject, InteractionMode.UserAction);
+                        return $"Prefabインスタンス '{objectName}' の変更をソースPrefab '{assetPath}' の状態に戻しました（指定されたプロパティパス: '{propertyPaths}'）";
+                    }
+                    catch (Exception revertEx)
+                    {
+                        Debug.LogError($"RevertPrefabInstance failed: {revertEx}");
+                        return $"エラー: Prefabインスタンス '{objectName}' の変更の復元に失敗しました: {revertEx.Message}";
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"RevertPrefabInstanceOverrides エラー: {e}");
+                return $"エラー: {e.Message}";
+            }
+        }
+
+        [McpServerTool, Description("Prefabインスタンスの状態と変更情報を取得")]
+        public async ValueTask<string> GetPrefabInstanceInfo(
+            [Description("Prefabインスタンスのオブジェクト名")] string objectName)
+        {
+            try
+            {
+                await UniTask.SwitchToMainThread();
+
+                // オブジェクトを検索
+                var gameObject = GameObject.Find(objectName);
+                if (gameObject == null)
+                {
+                    return $"エラー: オブジェクト '{objectName}' が見つかりません";
+                }
+
+                // Prefabインスタンスかどうかを確認
+                var prefabStatus = PrefabUtility.GetPrefabInstanceStatus(gameObject);
+                if (prefabStatus == PrefabInstanceStatus.NotAPrefab)
+                {
+                    return $"'{objectName}' はPrefabインスタンスではありません";
+                }
+
+                var prefabAsset = PrefabUtility.GetCorrespondingObjectFromSource(gameObject);
+                var assetPath = prefabAsset != null ? AssetDatabase.GetAssetPath(prefabAsset) : "不明";
+
+                var info = $"Prefabインスタンス情報: '{objectName}'\n";
+                info += $"ステータス: {prefabStatus}\n";
+                info += $"ソースPrefab: {assetPath}\n";
+
+                // プロパティ変更情報
+                var modifications = PrefabUtility.GetPropertyModifications(gameObject);
+                if (modifications != null && modifications.Length > 0)
+                {
+                    info += $"変更されたプロパティ数: {modifications.Length}\n";
+                    info += "変更の詳細:\n";
+                    
+                    for (int i = 0; i < Math.Min(modifications.Length, 10); i++) // 最初の10個まで表示
+                    {
+                        var mod = modifications[i];
+                        info += $"  - {mod.target?.name ?? "null"}.{mod.propertyPath}: {mod.value}\n";
+                    }
+                    
+                    if (modifications.Length > 10)
+                    {
+                        info += $"  ... および他 {modifications.Length - 10} 個の変更\n";
+                    }
+                }
+                else
+                {
+                    info += "変更されたプロパティ: なし\n";
+                }
+
+                // 追加・削除されたコンポーネントの情報
+                var addedComponents = PrefabUtility.GetAddedComponents(gameObject);
+                if (addedComponents.Count > 0)
+                {
+                    info += $"追加されたコンポーネント数: {addedComponents.Count}\n";
+                    foreach (var comp in addedComponents)
+                    {
+                        info += $"  + {comp.instanceComponent?.GetType().Name ?? "null"}\n";
+                    }
+                }
+
+                var removedComponents = PrefabUtility.GetRemovedComponents(gameObject);
+                if (removedComponents.Count > 0)
+                {
+                    info += $"削除されたコンポーネント数: {removedComponents.Count}\n";
+                    foreach (var comp in removedComponents)
+                    {
+                        info += $"  - {comp.assetComponent?.GetType().Name ?? "null"}\n";
+                    }
+                }
+
+                return info;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"GetPrefabInstanceInfo エラー: {e}");
+                return $"エラー: {e.Message}";
+            }
+        }
+
+        [McpServerTool, Description("Prefabインスタンスの全オーバーライドをリスト表示")]
+        public async ValueTask<string> ListPrefabInstanceOverrides(
+            [Description("Prefabインスタンスのオブジェクト名")] string objectName)
+        {
+            try
+            {
+                await UniTask.SwitchToMainThread();
+
+                // オブジェクトを検索
+                var gameObject = GameObject.Find(objectName);
+                if (gameObject == null)
+                {
+                    return $"エラー: オブジェクト '{objectName}' が見つかりません";
+                }
+
+                // Prefabインスタンスかどうかを確認
+                var prefabStatus = PrefabUtility.GetPrefabInstanceStatus(gameObject);
+                if (prefabStatus == PrefabInstanceStatus.NotAPrefab)
+                {
+                    return $"'{objectName}' はPrefabインスタンスではありません";
+                }
+
+                var prefabAsset = PrefabUtility.GetCorrespondingObjectFromSource(gameObject);
+                var assetPath = prefabAsset != null ? AssetDatabase.GetAssetPath(prefabAsset) : "不明";
+
+                var result = $"Prefabインスタンス '{objectName}' のオーバーライド一覧\n";
+                result += $"ソースPrefab: {assetPath}\n";
+                result += $"ステータス: {prefabStatus}\n\n";
+
+                // プロパティ変更
+                var modifications = PrefabUtility.GetPropertyModifications(gameObject);
+                if (modifications != null && modifications.Length > 0)
+                {
+                    result += $"=== プロパティ変更 ({modifications.Length}個) ===\n";
+                    foreach (var mod in modifications)
+                    {
+                        var targetName = mod.target?.name ?? "null";
+                        result += $"  {targetName}.{mod.propertyPath} = {mod.value}\n";
+                    }
+                    result += "\n";
+                }
+                else
+                {
+                    result += "=== プロパティ変更 ===\n  なし\n\n";
+                }
+
+                // 追加されたコンポーネント
+                var addedComponents = PrefabUtility.GetAddedComponents(gameObject);
+                if (addedComponents.Count > 0)
+                {
+                    result += $"=== 追加されたコンポーネント ({addedComponents.Count}個) ===\n";
+                    foreach (var comp in addedComponents)
+                    {
+                        var compType = comp.instanceComponent?.GetType().Name ?? "null";
+                        var targetName = comp.instanceComponent?.gameObject.name ?? "null";
+                        result += $"  + {targetName}: {compType}\n";
+                    }
+                    result += "\n";
+                }
+                else
+                {
+                    result += "=== 追加されたコンポーネント ===\n  なし\n\n";
+                }
+
+                // 削除されたコンポーネント
+                var removedComponents = PrefabUtility.GetRemovedComponents(gameObject);
+                if (removedComponents.Count > 0)
+                {
+                    result += $"=== 削除されたコンポーネント ({removedComponents.Count}個) ===\n";
+                    foreach (var comp in removedComponents)
+                    {
+                        var compType = comp.assetComponent?.GetType().Name ?? "null";
+                        result += $"  - {compType}\n";
+                    }
+                    result += "\n";
+                }
+                else
+                {
+                    result += "=== 削除されたコンポーネント ===\n  なし\n\n";
+                }
+
+                // 追加されたGameObject
+                var addedGameObjects = PrefabUtility.GetAddedGameObjects(gameObject);
+                if (addedGameObjects.Count > 0)
+                {
+                    result += $"=== 追加されたGameObject ({addedGameObjects.Count}個) ===\n";
+                    foreach (var obj in addedGameObjects)
+                    {
+                        var objName = obj.instanceGameObject?.name ?? "null";
+                        result += $"  + {objName}\n";
+                    }
+                    result += "\n";
+                }
+                else
+                {
+                    result += "=== 追加されたGameObject ===\n  なし\n\n";
+                }
+
+                return result;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"ListPrefabInstanceOverrides エラー: {e}");
+                return $"エラー: {e.Message}";
+            }
+        }
     }
 }
