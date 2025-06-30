@@ -942,7 +942,7 @@ namespace UnityNaturalMCPExtension.Editor
                 }
             }
 
-            // Handle arrays (Vector3, Color)
+            // Handle arrays (Vector3, Vector2, Color)
             if (value is Newtonsoft.Json.Linq.JArray jArray)
             {
                 if (targetType == typeof(Vector3))
@@ -951,6 +951,15 @@ namespace UnityNaturalMCPExtension.Editor
                     if (values.Length >= 3)
                     {
                         setValue(new Vector3(values[0], values[1], values[2]));
+                        return true;
+                    }
+                }
+                else if (targetType == typeof(Vector2))
+                {
+                    var values = jArray.ToObject<float[]>();
+                    if (values.Length >= 2)
+                    {
+                        setValue(new Vector2(values[0], values[1]));
                         return true;
                     }
                 }
@@ -1195,7 +1204,7 @@ namespace UnityNaturalMCPExtension.Editor
                 }
             }
 
-            // Handle arrays (Vector3, Color)
+            // Handle arrays (Vector3, Vector2, Color)
             if (value is Newtonsoft.Json.Linq.JArray jArray)
             {
                 if (targetType == typeof(Vector3))
@@ -1205,6 +1214,16 @@ namespace UnityNaturalMCPExtension.Editor
                     {
                         setValue(new Vector3(values[0], values[1], values[2]));
                         details.Add($"Set Vector3 value ({values[0]}, {values[1]}, {values[2]})");
+                        return new PropertySetResult(true, null, string.Join("; ", details));
+                    }
+                }
+                else if (targetType == typeof(Vector2))
+                {
+                    var values = jArray.ToObject<float[]>();
+                    if (values.Length >= 2)
+                    {
+                        setValue(new Vector2(values[0], values[1]));
+                        details.Add($"Set Vector2 value ({values[0]}, {values[1]})");
                         return new PropertySetResult(true, null, string.Join("; ", details));
                     }
                 }
@@ -1596,7 +1615,7 @@ namespace UnityNaturalMCPExtension.Editor
                     }
                 }
                 
-                // Handle arrays (Vector3, Color)
+                // Handle arrays (Vector3, Vector2, Color)
                 if (value is Newtonsoft.Json.Linq.JArray jArray)
                 {
                     if (targetType == typeof(Vector3))
@@ -1606,6 +1625,16 @@ namespace UnityNaturalMCPExtension.Editor
                         {
                             var vector = new Vector3(values[0], values[1], values[2]);
                             details.Add($"Converted array to Vector3: ({vector.x}, {vector.y}, {vector.z})");
+                            return vector;
+                        }
+                    }
+                    else if (targetType == typeof(Vector2))
+                    {
+                        var values = jArray.ToObject<float[]>();
+                        if (values.Length >= 2)
+                        {
+                            var vector = new Vector2(values[0], values[1]);
+                            details.Add($"Converted array to Vector2: ({vector.x}, {vector.y})");
                             return vector;
                         }
                     }
