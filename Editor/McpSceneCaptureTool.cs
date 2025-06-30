@@ -318,7 +318,7 @@ namespace UnityNaturalMCPExtension.Editor
 
                     // Get prefab root
                     var prefabRoot = prefabStage.prefabContentsRoot;
-                    
+
                     // Calculate camera position
                     if (captureFromFront)
                     {
@@ -349,7 +349,7 @@ namespace UnityNaturalMCPExtension.Editor
                             // Also check for RectTransform as a primary indicator
                             isUI = canvas != null || prefabRoot.GetComponent<RectTransform>() != null;
                         }
-                        
+
                         // Get all renderers in the prefab (for 3D objects)
                         var renderers = prefabRoot.GetComponentsInChildren<Renderer>();
                         foreach (var renderer in renderers)
@@ -392,7 +392,7 @@ namespace UnityNaturalMCPExtension.Editor
                                     for (int i = 0; i < 4; i++)
                                     {
                                         Vector3 worldCorner = rectTransform.TransformPoint(localCorners[i]);
-                                        
+
                                         if (!boundsInitialized)
                                         {
                                             bounds = new Bounds(worldCorner, Vector3.zero);
@@ -404,7 +404,7 @@ namespace UnityNaturalMCPExtension.Editor
                                         }
                                     }
                                 }
-                                
+
                                 // If bounds are still too small, expand them
                                 if (boundsInitialized && bounds.size.magnitude < 1f)
                                 {
@@ -418,7 +418,7 @@ namespace UnityNaturalMCPExtension.Editor
                         {
                             bounds = new Bounds(prefabRoot.transform.position, Vector3.one);
                         }
-                        
+
                         // Debug logging for bounds calculation
                         Debug.Log($"[CapturePrefabView] Calculated bounds: Center={bounds.center}, Size={bounds.size}, IsUI={isUI}");
 
@@ -434,48 +434,47 @@ namespace UnityNaturalMCPExtension.Editor
                             // For 3D objects, use 180 degree rotation for front view
                             sceneView.rotation = Quaternion.Euler(0, 180, 0); // Front view for 3D
                         }
-                        
+
                         // Calculate appropriate camera distance
                         float requiredFieldOfView = 60f; // Standard FOV
                         float halfFOV = requiredFieldOfView * 0.5f * Mathf.Deg2Rad;
-                        
+
                         if (isUI)
                         {
-                            // For UI objects, use Canvas position as camera target
-                            Vector3 canvasPosition = Vector3.zero;
-                            
-                            // Get Canvas position, fallback to prefab root position
+                            // For UI objects, use GetOverlayCanvasCenterWorld to get proper world position
+                            Vector3 canvasWorldCenter = Vector3.zero;
+
                             if (canvas != null)
                             {
-                                canvasPosition = canvas.transform.position;
+                                canvasWorldCenter = GetOverlayCanvasCenterWorld(canvas);
+                                // Set SceneView position to Canvas world center X,Y coordinates
+                                sceneView.pivot = new Vector3(canvasWorldCenter.x, canvasWorldCenter.y, sceneView.pivot.z);
                             }
                             else
                             {
-                                canvasPosition = prefabRoot.transform.position;
+                                // Fallback to prefab root position
+                                Vector3 prefabPosition = prefabRoot.transform.position;
+                                sceneView.pivot = new Vector3(prefabPosition.x, prefabPosition.y, sceneView.pivot.z);
                             }
-                            
-                            // Set SceneView pivot to Canvas X,Y position with closer Z distance
-                            float closeZDistance = 10.0f; // Much closer distance for UI
-                            sceneView.pivot = new Vector3(canvasPosition.x, canvasPosition.y, canvasPosition.z - closeZDistance);
-                            
+
                             // Simplified size calculation for UI elements
                             // Use a reasonable size based on capture dimensions
                             float uiSize = Mathf.Max(width, height) * 0.5f; // Half of the larger dimension
                             sceneView.size = uiSize;
-                            
-                            Debug.Log($"[CapturePrefabView] UI Canvas Position - Canvas={canvasPosition}, Pivot={sceneView.pivot}, Size={sceneView.size}, Capture Size={width}x{height}");
+
+                            Debug.Log($"[CapturePrefabView] UI Canvas Position - Canvas={canvasWorldCenter}, Pivot={sceneView.pivot}, Size={sceneView.size}, Capture Size={width}x{height}");
                         }
                         else
                         {
                             // For 3D objects, calculate distance based on object size and desired FOV
                             float objectRadius = bounds.size.magnitude * 0.5f;
                             float distance = objectRadius / Mathf.Tan(halfFOV);
-                            
+
                             // The size parameter in SceneView represents half the height of the view
                             // Calculate it to ensure the entire object fits with padding
                             sceneView.size = objectRadius * 1.2f; // 20% padding
                         }
-                        
+
                         // Apply additional camera distance if specified
                         if (cameraDistance > 0)
                         {
@@ -500,7 +499,7 @@ namespace UnityNaturalMCPExtension.Editor
 
                     // Apply framing logic based on object type
                     Selection.activeGameObject = prefabRoot;
-                    
+
                     // Check if this is a UI object for proper framing
                     bool isUIForFraming = false;
                     Canvas frameCanvas = null;
@@ -517,44 +516,43 @@ namespace UnityNaturalMCPExtension.Editor
                         frameCanvas = prefabRoot.GetComponentInParent<Canvas>() ?? prefabRoot.GetComponent<Canvas>();
                         isUIForFraming = frameCanvas != null || prefabRoot.GetComponent<RectTransform>() != null;
                     }
-                    
+
                     if (isUIForFraming)
                     {
                         // For UI objects, don't use FrameSelected and keep fixed position settings
                         // Always use front view for UI (camera looking down negative Z axis)
                         sceneView.rotation = Quaternion.identity; // Front view for UI
-                        
-                        // Ensure pivot uses Canvas position for UI capture
+
+                        // Ensure pivot uses Canvas world center position for UI capture
                         if (captureFromFront)
                         {
-                            Vector3 canvasPosition = Vector3.zero;
+                            Vector3 canvasWorldCenter = Vector3.zero;
                             if (frameCanvas != null)
                             {
-                                canvasPosition = frameCanvas.transform.position;
+                                canvasWorldCenter = GetOverlayCanvasCenterWorld(frameCanvas);
+                                sceneView.pivot = new Vector3(canvasWorldCenter.x, canvasWorldCenter.y, sceneView.pivot.z);
                             }
                             else
                             {
-                                canvasPosition = prefabRoot.transform.position;
+                                Vector3 prefabPosition = prefabRoot.transform.position;
+                                sceneView.pivot = new Vector3(prefabPosition.x, prefabPosition.y, sceneView.pivot.z);
                             }
-                            
-                            float closeZDistance = 10.0f;
-                            sceneView.pivot = new Vector3(canvasPosition.x, canvasPosition.y, canvasPosition.z - closeZDistance);
                         }
-                        
+
                         Debug.Log($"[CapturePrefabView] UI Frame Settings - Pivot={sceneView.pivot}, Rotation={sceneView.rotation.eulerAngles}");
                     }
                     else
                     {
                         // Use FrameSelected for 3D objects or when not using front capture
                         sceneView.FrameSelected();
-                        
+
                         // Override rotation for front view if needed for 3D objects
                         if (captureFromFront && !isUIForFraming)
                         {
                             sceneView.rotation = Quaternion.Euler(0, 180, 0); // Front view for 3D
                         }
                     }
-                    
+
                     // Force repaint
                     sceneView.Repaint();
 
@@ -643,6 +641,29 @@ namespace UnityNaturalMCPExtension.Editor
                 Debug.LogError($"Failed to capture prefab view: {e}");
                 return $"Error: Failed to capture prefab view - {e.Message}";
             }
+        }
+
+        /// <summary>
+        /// Prefab モード中の Screen Space – Overlay Canvas の中心を
+        /// SceneView カメラ基準のワールド座標で返します。
+        /// </summary>
+        private static Vector3 GetOverlayCanvasCenterWorld(Canvas canvas)
+        {
+            // ① Canvas の中心 (UI 座標) を求める
+            RectTransform rt = canvas.transform as RectTransform;
+            Vector3 uiCenter = new(rt.rect.width * 0.5f, rt.rect.height * 0.5f, 0f);
+
+#if UNITY_EDITOR
+            // ② SceneView カメラで UI → ワールドへ変換
+            SceneView sv = SceneView.lastActiveSceneView;
+            if (sv != null && sv.camera != null)
+            {
+                return sv.camera.ScreenToWorldPoint(uiCenter);
+            }
+#endif
+            // 実行時は任意のカメラを使って同様に変換する
+            Camera cam = Camera.main;
+            return cam ? cam.ScreenToWorldPoint(uiCenter) : Vector3.zero;
         }
     }
 }
