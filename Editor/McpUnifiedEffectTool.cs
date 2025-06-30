@@ -103,6 +103,13 @@ namespace UnityNaturalMCPExtension.Editor
 
                 var changes = new List<string>();
 
+                // Stop particle system if it's playing to avoid errors when changing certain properties
+                bool wasPlaying = particleSystem.isPlaying;
+                if (wasPlaying)
+                {
+                    particleSystem.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                }
+
                 // Apply main settings
                 if (!string.IsNullOrEmpty(mainSettings))
                 {
@@ -298,6 +305,12 @@ namespace UnityNaturalMCPExtension.Editor
                 }
 
                 EditorUtility.SetDirty(particleSystem);
+
+                // Restart particle system if it was playing
+                if (wasPlaying)
+                {
+                    particleSystem.Play();
+                }
 
                 if (changes.Count == 0)
                     return createNew
