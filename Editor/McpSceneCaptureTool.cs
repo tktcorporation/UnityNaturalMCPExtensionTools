@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
 using ModelContextProtocol.Server;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -256,6 +257,219 @@ namespace UnityNaturalMCPExtension.Editor
             {
                 Debug.LogError($"Failed to list screenshots: {e}");
                 return $"Error: Failed to list screenshots - {e.Message}";
+            }
+        }
+
+        [McpServerTool, Description("Capture UI Prefab in Prefab Mode and save as PNG")]
+        public async ValueTask<string> CapturePrefabView(
+            [Description("Path to the prefab asset to capture")]
+            string prefabPath,
+            [Description("Capture from front view automatically (optional, default: false)")]
+            bool captureFromFront = false,
+            [Description("Camera position [x,y,z] (optional, ignored if captureFromFront is true)")]
+            float[] cameraPosition = null,
+            [Description("Camera rotation in euler angles [x,y,z] (optional, ignored if captureFromFront is true)")]
+            float[] cameraRotation = null,
+            [Description("Capture width in pixels (optional, default: 1920)")]
+            int width = 1920,
+            [Description("Capture height in pixels (optional, default: 1080)")]
+            int height = 1080,
+            [Description("Camera distance from prefab when captureFromFront is true (optional, default: 5.0)")]
+            float cameraDistance = 5.0f)
+        {
+            try
+            {
+                await UniTask.SwitchToMainThread();
+
+                // Store current Prefab stage state
+                var originalPrefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                string originalPrefabPath = originalPrefabStage?.assetPath;
+
+                // Verify prefab exists
+                var prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                if (prefabAsset == null)
+                {
+                    return $"Error: Prefab '{prefabPath}' not found";
+                }
+
+                // Open prefab in Prefab Mode
+                var prefabStage = PrefabStageUtility.OpenPrefab(prefabPath);
+                if (prefabStage == null)
+                {
+                    return $"Error: Failed to open prefab '{prefabPath}' in Prefab Mode";
+                }
+
+                try
+                {
+                    // Get the active Scene View
+                    var sceneView = SceneView.lastActiveSceneView;
+                    if (sceneView == null)
+                    {
+                        // Open a Scene View if none exists
+                        sceneView = SceneView.GetWindow<SceneView>();
+                    }
+
+                    // Store original camera state
+                    var originalPivot = sceneView.pivot;
+                    var originalRotation = sceneView.rotation;
+                    var originalSize = sceneView.size;
+
+                    // Get prefab root
+                    var prefabRoot = prefabStage.prefabContentsRoot;
+                    
+                    // Calculate camera position
+                    if (captureFromFront)
+                    {
+                        // Calculate bounds of the prefab
+                        Bounds bounds = new Bounds(Vector3.zero, Vector3.zero);
+                        bool boundsInitialized = false;
+
+                        // Get all renderers in the prefab
+                        var renderers = prefabRoot.GetComponentsInChildren<Renderer>();
+                        foreach (var renderer in renderers)
+                        {
+                            if (!boundsInitialized)
+                            {
+                                bounds = renderer.bounds;
+                                boundsInitialized = true;
+                            }
+                            else
+                            {
+                                bounds.Encapsulate(renderer.bounds);
+                            }
+                        }
+
+                        // If no renderers, try RectTransforms for UI
+                        if (!boundsInitialized)
+                        {
+                            var rectTransforms = prefabRoot.GetComponentsInChildren<RectTransform>();
+                            foreach (var rectTransform in rectTransforms)
+                            {
+                                Vector3[] corners = new Vector3[4];
+                                rectTransform.GetWorldCorners(corners);
+                                foreach (var corner in corners)
+                                {
+                                    if (!boundsInitialized)
+                                    {
+                                        bounds = new Bounds(corner, Vector3.zero);
+                                        boundsInitialized = true;
+                                    }
+                                    else
+                                    {
+                                        bounds.Encapsulate(corner);
+                                    }
+                                }
+                            }
+                        }
+
+                        // Set camera to front view
+                        sceneView.pivot = bounds.center;
+                        sceneView.rotation = Quaternion.Euler(0, 180, 0); // Front view
+                        sceneView.size = Mathf.Max(bounds.size.x, bounds.size.y) * 0.5f + cameraDistance;
+                    }
+                    else
+                    {
+                        // Use custom camera position/rotation if provided
+                        if (cameraPosition != null && cameraPosition.Length >= 3)
+                        {
+                            var position = new Vector3(cameraPosition[0], cameraPosition[1], cameraPosition[2]);
+                            sceneView.pivot = position;
+                        }
+
+                        if (cameraRotation != null && cameraRotation.Length >= 3)
+                        {
+                            var rotation = Quaternion.Euler(cameraRotation[0], cameraRotation[1], cameraRotation[2]);
+                            sceneView.rotation = rotation;
+                        }
+                    }
+
+                    // Force repaint
+                    sceneView.Repaint();
+
+                    // Wait a frame for the view to update
+                    await UniTask.Yield();
+
+                    // Capture the Scene View
+                    var camera = sceneView.camera;
+                    if (camera == null)
+                    {
+                        return "Error: Scene View camera not available";
+                    }
+
+                    // Create render texture
+                    var renderTexture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
+                    renderTexture.Create();
+
+                    // Store original camera settings
+                    var originalTargetTexture = camera.targetTexture;
+                    var originalCullingMask = camera.cullingMask;
+
+                    try
+                    {
+                        // Render to texture
+                        camera.targetTexture = renderTexture;
+                        camera.Render();
+
+                        // Create Texture2D and read pixels
+                        RenderTexture.active = renderTexture;
+                        var texture2D = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                        texture2D.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+                        texture2D.Apply();
+
+                        // Create output directory
+                        var projectPath = Path.GetDirectoryName(Application.dataPath);
+                        var outputDirectory = Path.Combine(projectPath, "SceneCapture");
+                        if (!Directory.Exists(outputDirectory))
+                            Directory.CreateDirectory(outputDirectory);
+
+                        // Generate filename
+                        var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HHmmss");
+                        var prefabName = Path.GetFileNameWithoutExtension(prefabPath);
+                        var filename = $"prefab_{prefabName}_{timestamp}.png";
+                        var fullPath = Path.Combine(outputDirectory, filename);
+
+                        // Save PNG
+                        var pngData = texture2D.EncodeToPNG();
+                        File.WriteAllBytes(fullPath, pngData);
+
+                        // Cleanup
+                        GameObject.DestroyImmediate(texture2D);
+
+                        Debug.Log($"Prefab captured successfully: {fullPath}");
+
+                        // Restore camera state
+                        sceneView.pivot = originalPivot;
+                        sceneView.rotation = originalRotation;
+                        sceneView.size = originalSize;
+                        sceneView.Repaint();
+
+                        return $"Prefab '{prefabPath}' captured successfully to: {fullPath}";
+                    }
+                    finally
+                    {
+                        // Restore camera settings
+                        camera.targetTexture = originalTargetTexture;
+                        camera.cullingMask = originalCullingMask;
+                        RenderTexture.active = null;
+                        GameObject.DestroyImmediate(renderTexture);
+                    }
+                }
+                finally
+                {
+                    // Exit Prefab Mode without saving
+                    StageUtility.GoBackToPreviousStage();
+
+                    // If there was an original prefab open, reopen it
+                    if (!string.IsNullOrEmpty(originalPrefabPath))
+                    {
+                        PrefabStageUtility.OpenPrefab(originalPrefabPath);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Failed to capture prefab view: {e}");
+                return $"Error: Failed to capture prefab view - {e.Message}";
             }
         }
     }
