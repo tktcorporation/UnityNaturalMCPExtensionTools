@@ -451,7 +451,7 @@ namespace UnityNaturalMCPExtension.Editor
 
                             if (canvas != null)
                             {
-                                canvasWorldCenter = GetOverlayCanvasCenterWorld(canvas);
+                                canvasWorldCenter = GetOverlayCanvasCenterWorld(canvas, width, height);
                                 // Set SceneView position to Canvas world center X,Y coordinates
                                 sceneView.pivot = new Vector3(canvasWorldCenter.x, canvasWorldCenter.y, sceneView.pivot.z);
                             }
@@ -534,7 +534,7 @@ namespace UnityNaturalMCPExtension.Editor
                             Vector3 canvasWorldCenter = Vector3.zero;
                             if (frameCanvas != null)
                             {
-                                canvasWorldCenter = GetOverlayCanvasCenterWorld(frameCanvas);
+                                canvasWorldCenter = GetOverlayCanvasCenterWorld(frameCanvas, width, height);
                                 sceneView.pivot = new Vector3(canvasWorldCenter.x, canvasWorldCenter.y, sceneView.pivot.z);
                             }
                             else
@@ -779,9 +779,12 @@ namespace UnityNaturalMCPExtension.Editor
         /// Prefab モード中の Screen Space – Overlay Canvas の中心を
         /// 一時的なGameObjectを配置して取得したワールド座標で返します。
         /// </summary>
-        private static Vector3 GetOverlayCanvasCenterWorld(Canvas canvas)
+        /// <param name="canvas">対象のCanvas</param>
+        /// <param name="width">キャプチャ幅</param>
+        /// <param name="height">キャプチャ高さ</param>
+        private static Vector3 GetOverlayCanvasCenterWorld(Canvas canvas, int width, int height)
         {
-            return new Vector3(1920f / 4, 1080f / 4, 0f);
+            return new Vector3(width / 4f, height / 4f, 0f);
 
             // // ① Canvas の中心 (UI 座標) を求める
             // RectTransform rt = canvas.transform as RectTransform;
