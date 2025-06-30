@@ -143,11 +143,11 @@ namespace UnityNaturalMCPExtension.Editor
             }
         }
 
-        [McpServerTool, Description("Manipulate existing objects (transform, parent, duplicate, rename, or delete)")]
+        [McpServerTool, Description("Manipulate existing objects (transform, parent, duplicate, rename, delete, or setactive)")]
         public async ValueTask<string> ManipulateObject(
             [Description("Name of the GameObject to manipulate")]
             string objectName,
-            [Description("Operation to perform: 'transform', 'parent', 'duplicate', 'rename', or 'delete'")]
+            [Description("Operation to perform: 'transform', 'parent', 'duplicate', 'rename', 'delete', or 'setactive'")]
             string operation,
             [Description("For transform/duplicate: Position [x,y,z] (optional)")]
             float[] position = null,
@@ -163,6 +163,8 @@ namespace UnityNaturalMCPExtension.Editor
             string newName = null,
             [Description("For parent: Keep world position when parenting (optional, default: true)")]
             bool worldPositionStays = true,
+            [Description("For setactive: Set active state (optional)")]
+            bool? isActive = null,
             [Description("Operate in Prefab mode context instead of scene (optional, default: false)")]
             bool inPrefabMode = false)
         {
@@ -287,8 +289,32 @@ namespace UnityNaturalMCPExtension.Editor
                         }
                         return $"Successfully deleted GameObject '{objectName}'";
 
+                    case "setactive":
+                        if (!isActive.HasValue)
+                            return "Error: isActive is required for setactive operation";
+                        
+                        var oldActiveState = gameObject.activeSelf;
+                        Undo.RecordObject(gameObject, $"Set Active {objectName}");
+                        gameObject.SetActive(isActive.Value);
+                        EditorUtility.SetDirty(gameObject);
+                        
+                        if (inPrefabMode)
+                        {
+                            var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                            if (prefabStage != null)
+                            {
+                                EditorSceneManager.MarkSceneDirty(prefabStage.scene);
+                            }
+                        }
+                        else
+                        {
+                            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+                        }
+                        
+                        return $"Successfully changed GameObject '{objectName}' active state from {oldActiveState} to {isActive.Value}";
+
                     default:
-                        return "Error: operation must be 'transform', 'parent', 'duplicate', 'rename', or 'delete'";
+                        return "Error: operation must be 'transform', 'parent', 'duplicate', 'rename', 'delete', or 'setactive'";
                 }
             }
             catch (Exception e)
