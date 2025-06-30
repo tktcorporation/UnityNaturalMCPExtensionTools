@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Reflection;
@@ -11,6 +12,7 @@ using UnityEditor.SceneManagement;
 using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.UI;
 
 namespace UnityNaturalMCPExtension.Editor
 {
@@ -287,6 +289,9 @@ namespace UnityNaturalMCPExtension.Editor
                 var originalPrefabStage = PrefabStageUtility.GetCurrentPrefabStage();
                 string originalPrefabPath = originalPrefabStage?.assetPath;
 
+                // Border objects for UI Canvas cleanup
+                List<GameObject> borderObjects = null;
+
                 // Verify prefab exists
                 var prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
                 if (prefabAsset == null)
@@ -539,6 +544,13 @@ namespace UnityNaturalMCPExtension.Editor
                             }
                         }
 
+                        // Create border for UI Canvas if isUIObject is true
+                        if (isUIObject == true && frameCanvas != null)
+                        {
+                            borderObjects = CreateCanvasBorder(frameCanvas, width, height);
+                            Debug.Log($"[CapturePrefabView] Created {borderObjects?.Count ?? 0} border objects for Canvas");
+                        }
+
                         Debug.Log($"[CapturePrefabView] UI Frame Settings - Pivot={sceneView.pivot}, Rotation={sceneView.rotation.eulerAngles}");
                     }
                     else
@@ -626,6 +638,20 @@ namespace UnityNaturalMCPExtension.Editor
                 }
                 finally
                 {
+                    // Cleanup border objects if created
+                    if (borderObjects != null)
+                    {
+                        foreach (var borderObj in borderObjects)
+                        {
+                            if (borderObj != null)
+                            {
+                                GameObject.DestroyImmediate(borderObj);
+                            }
+                        }
+                        borderObjects.Clear();
+                        Debug.Log("[CapturePrefabView] Cleaned up border objects");
+                    }
+
                     // Exit Prefab Mode without saving
                     StageUtility.GoBackToPreviousStage();
 
@@ -641,6 +667,112 @@ namespace UnityNaturalMCPExtension.Editor
                 Debug.LogError($"Failed to capture prefab view: {e}");
                 return $"Error: Failed to capture prefab view - {e.Message}";
             }
+        }
+
+        /// <summary>
+        /// Canvas の周囲に10ピクセルの境界線を作成します。
+        /// </summary>
+        /// <param name="canvas">境界線を作成するCanvas</param>
+        /// <param name="width">キャプチャ幅</param>
+        /// <param name="height">キャプチャ高さ</param>
+        /// <returns>作成された境界線GameObjectのリスト</returns>
+        private static List<GameObject> CreateCanvasBorder(Canvas canvas, int width, int height)
+        {
+            var borderObjects = new List<GameObject>();
+
+            try
+            {
+                var canvasRectTransform = canvas.transform as RectTransform;
+                if (canvasRectTransform == null)
+                {
+                    Debug.LogWarning("[CreateCanvasBorder] Canvas does not have RectTransform");
+                    return borderObjects;
+                }
+
+                // キャプチャサイズを使用
+                const float borderThickness = 10f;
+
+                // 境界線用の色（黒）
+                Color borderColor = Color.black;
+
+                // 4つの境界線を作成 (上、下、左、右)
+
+                // 上の境界線 - Canvas幅の中央に配置、Canvas上端の外側
+                var topBorder = CreateBorderImage(canvas, "TopBorder",
+                    width, borderThickness,
+                    new Vector2(width * 0.5f, height + borderThickness * 0.5f), borderColor);
+                borderObjects.Add(topBorder);
+
+                // 下の境界線 - Canvas幅の中央に配置、Canvas下端の外側
+                var bottomBorder = CreateBorderImage(canvas, "BottomBorder",
+                    width, borderThickness,
+                    new Vector2(width * 0.5f, -borderThickness * 0.5f), borderColor);
+                borderObjects.Add(bottomBorder);
+
+                // 左の境界線 - Canvas左端の外側、Canvas高さ全体をカバー
+                var leftBorder = CreateBorderImage(canvas, "LeftBorder",
+                    borderThickness, height,
+                    new Vector2(-borderThickness * 0.5f, height * 0.5f), borderColor);
+                borderObjects.Add(leftBorder);
+
+                // 右の境界線 - Canvas右端の外側、Canvas高さ全体をカバー
+                var rightBorder = CreateBorderImage(canvas, "RightBorder",
+                    borderThickness, height,
+                    new Vector2(width + borderThickness * 0.5f, height * 0.5f), borderColor);
+                borderObjects.Add(rightBorder);
+
+                Debug.Log($"[CreateCanvasBorder] Created {borderObjects.Count} border objects for capture size: {width}x{height}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[CreateCanvasBorder] Failed to create border: {e}");
+
+                // エラーが発生した場合、既に作成されたオブジェクトをクリーンアップ
+                foreach (var obj in borderObjects)
+                {
+                    if (obj != null)
+                        GameObject.DestroyImmediate(obj);
+                }
+                borderObjects.Clear();
+            }
+
+            return borderObjects;
+        }
+
+        /// <summary>
+        /// 境界線用のImageオブジェクトを作成します。
+        /// </summary>
+        /// <param name="canvas">親Canvas</param>
+        /// <param name="name">オブジェクト名</param>
+        /// <param name="width">幅</param>
+        /// <param name="height">高さ</param>
+        /// <param name="position">位置</param>
+        /// <param name="color">色</param>
+        /// <returns>作成されたGameObject</returns>
+        private static GameObject CreateBorderImage(Canvas canvas, string name, float width, float height, Vector2 position, Color color)
+        {
+            Debug.LogError($"[CreateBorderImage] Creating border image: {name}, Size: {width}x{height}, Position: {position}, Color: {color}");
+            var borderObj = new GameObject(name);
+            borderObj.transform.SetParent(canvas.transform, false);
+
+            // RectTransformの設定
+            var rectTransform = borderObj.AddComponent<RectTransform>();
+            rectTransform.sizeDelta = new Vector2(width, height);
+            rectTransform.anchoredPosition = position;
+            rectTransform.anchorMin = Vector2.zero;
+            rectTransform.anchorMax = Vector2.zero;
+
+            // Imageコンポーネントの追加と設定
+            var image = borderObj.AddComponent<Image>();
+            image.color = color;
+
+            // 最前面に表示されるようにソート順序を設定
+            var canvasGroup = borderObj.AddComponent<CanvasGroup>();
+            canvasGroup.alpha = 1f;
+            canvasGroup.interactable = false;
+            canvasGroup.blocksRaycasts = false;
+
+            return borderObj;
         }
 
         /// <summary>
