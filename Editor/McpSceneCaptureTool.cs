@@ -661,6 +661,15 @@ namespace UnityNaturalMCPExtension.Editor
                         Debug.Log("[CapturePrefabView] Cleaned up border objects");
                     }
 
+                    // isUIObject=trueの場合は変更を破棄してPrefabモードを終了
+                    var currentPrefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                    if (currentPrefabStage != null && isUIObject == true)
+                    {
+                        // 変更フラグをクリア（変更を破棄）
+                        currentPrefabStage.ClearDirtiness();
+                        Debug.Log("[CapturePrefabView] Cleared prefab dirtiness for UI object");
+                    }
+
                     // Exit Prefab Mode without saving
                     StageUtility.GoBackToPreviousStage();
 
