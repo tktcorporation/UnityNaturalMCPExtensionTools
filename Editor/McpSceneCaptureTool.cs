@@ -285,6 +285,13 @@ namespace UnityNaturalMCPExtension.Editor
             {
                 await UniTask.SwitchToMainThread();
 
+                // If currently in Prefab mode, exit without saving
+                var currentStage = PrefabStageUtility.GetCurrentPrefabStage();
+                if (currentStage != null)
+                {
+                    StageUtility.GoBackToPreviousStage();
+                }
+
                 // Store current Prefab stage state
                 var originalPrefabStage = PrefabStageUtility.GetCurrentPrefabStage();
                 string originalPrefabPath = originalPrefabStage?.assetPath;
