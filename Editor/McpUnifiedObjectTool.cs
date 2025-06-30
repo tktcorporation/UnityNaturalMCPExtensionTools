@@ -143,11 +143,11 @@ namespace UnityNaturalMCPExtension.Editor
             }
         }
 
-        [McpServerTool, Description("Manipulate existing objects (transform, parent, duplicate, rename, delete, or setactive)")]
+        [McpServerTool, Description("Manipulate existing objects (transform, parent, duplicate, rename, delete, setactive, or setlayer)")]
         public async ValueTask<string> ManipulateObject(
             [Description("Name of the GameObject to manipulate")]
             string objectName,
-            [Description("Operation to perform: 'transform', 'parent', 'duplicate', 'rename', 'delete', or 'setactive'")]
+            [Description("Operation to perform: 'transform', 'parent', 'duplicate', 'rename', 'delete', 'setactive', or 'setlayer'")]
             string operation,
             [Description("For transform/duplicate: Position [x,y,z] (optional)")]
             float[] position = null,
@@ -165,6 +165,10 @@ namespace UnityNaturalMCPExtension.Editor
             bool worldPositionStays = true,
             [Description("For setactive: Set active state (optional)")]
             bool? isActive = null,
+            [Description("For setlayer: Layer name to set (optional)")]
+            string layerName = null,
+            [Description("For setlayer: Layer index to set (0-31, optional)")]
+            int? layerIndex = null,
             [Description("Operate in Prefab mode context instead of scene (optional, default: false)")]
             bool inPrefabMode = false)
         {
@@ -313,8 +317,50 @@ namespace UnityNaturalMCPExtension.Editor
                         
                         return $"Successfully changed GameObject '{objectName}' active state from {oldActiveState} to {isActive.Value}";
 
+                    case "setlayer":
+                        if (layerName == null && layerIndex == null)
+                            return "Error: Either layerName or layerIndex is required for setlayer operation";
+                        
+                        int targetLayerIndex = -1;
+                        
+                        if (layerName != null)
+                        {
+                            targetLayerIndex = LayerMask.NameToLayer(layerName);
+                            if (targetLayerIndex == -1)
+                                return $"Error: Layer '{layerName}' not found";
+                        }
+                        else if (layerIndex.HasValue)
+                        {
+                            if (!IsValidLayerIndex(layerIndex.Value))
+                                return $"Error: Layer index {layerIndex.Value} is invalid. Must be between 0 and 31";
+                            targetLayerIndex = layerIndex.Value;
+                        }
+                        
+                        var oldLayer = gameObject.layer;
+                        var oldLayerName = LayerMask.LayerToName(oldLayer);
+                        var newLayerName = LayerMask.LayerToName(targetLayerIndex);
+                        
+                        Undo.RecordObject(gameObject, $"Set Layer {objectName}");
+                        gameObject.layer = targetLayerIndex;
+                        EditorUtility.SetDirty(gameObject);
+                        
+                        if (inPrefabMode)
+                        {
+                            var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                            if (prefabStage != null)
+                            {
+                                EditorSceneManager.MarkSceneDirty(prefabStage.scene);
+                            }
+                        }
+                        else
+                        {
+                            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+                        }
+                        
+                        return $"Successfully changed GameObject '{objectName}' layer from {oldLayer} ({oldLayerName}) to {targetLayerIndex} ({newLayerName})";
+
                     default:
-                        return "Error: operation must be 'transform', 'parent', 'duplicate', 'rename', 'delete', or 'setactive'";
+                        return "Error: operation must be 'transform', 'parent', 'duplicate', 'rename', 'delete', 'setactive', or 'setlayer'";
                 }
             }
             catch (Exception e)
@@ -466,6 +512,7 @@ namespace UnityNaturalMCPExtension.Editor
                 var info = new System.Text.StringBuilder();
                 info.AppendLine($"GameObject: {gameObject.name}");
                 info.AppendLine($"Active: {gameObject.activeInHierarchy}");
+                info.AppendLine($"Layer: {gameObject.layer} ({LayerMask.LayerToName(gameObject.layer)})");
                 info.AppendLine($"Position: {gameObject.transform.position}");
                 info.AppendLine($"Rotation: {gameObject.transform.eulerAngles}");
                 info.AppendLine($"Scale: {gameObject.transform.localScale}");
@@ -1399,6 +1446,12 @@ namespace UnityNaturalMCPExtension.Editor
                 return $"Array/List (Count: {collection.Count})";
 
             return value.ToString();
+        }
+
+        // Helper method for layer validation (only for GameObject layer setting)
+        private bool IsValidLayerIndex(int layerIndex)
+        {
+            return layerIndex >= 0 && layerIndex <= 31;
         }
     }
 }

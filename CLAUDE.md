@@ -18,8 +18,7 @@ Unity Natural MCP サーバーの機能を拡張し、Unityエディタ操作の
 | **McpSceneCaptureTool** | シーンスクリーンショット機能 | CaptureScene, CaptureGameView, ListCapturedScreenshots | 3 |
 | **McpPrefabEditTool** | Prefab編集モード管理 | OpenPrefabMode, SavePrefabChanges, ExitPrefabMode, GetPrefabEditStatus | 4 |
 | **McpSceneManagementTool** | Scene作成・管理・操作 | CreateScene, SaveScene, LoadScene, ListScenes, GetActiveSceneInfo, CloseScene | 6 |
-
-**統合結果**: 31個のメソッド → 25個のメソッド（約19%削減）
+| **McpProjectSettingsTool** | プロジェクト設定管理 | ManageProjectLayers | 1 |
 
 ### ディレクトリ構造
 
@@ -38,14 +37,17 @@ com.sack-kazu.unity-natural-mcp-extension-tools/
 │   ├── McpPrefabEditTool.cs    # Prefab編集モード管理
 │   ├── McpPrefabEditToolBuilder.cs
 │   ├── McpSceneManagementTool.cs # Scene作成・管理機能
-│   └── McpSceneManagementToolBuilder.cs
+│   ├── McpSceneManagementToolBuilder.cs
+│   ├── McpProjectSettingsTool.cs # プロジェクト設定管理
+│   └── McpProjectSettingsToolBuilder.cs
 ├── Runtime/                    # ScriptableObjectアセット
 │   ├── McpUnifiedObjectToolBuilder.asset
 │   ├── McpUnifiedAssetToolBuilder.asset
 │   ├── McpUnifiedEffectToolBuilder.asset
 │   ├── McpSceneCaptureToolBuilder.asset
 │   ├── McpPrefabEditToolBuilder.asset
-│   └── McpSceneManagementToolBuilder.asset
+│   ├── McpSceneManagementToolBuilder.asset
+│   └── McpProjectSettingsToolBuilder.asset
 └── package.json               # パッケージマニフェスト
 ```
 
