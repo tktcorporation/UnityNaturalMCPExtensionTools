@@ -235,7 +235,7 @@ namespace UnityNaturalMCPExtension.Editor
                     // 全ての変更を適用
                     try
                     {
-                        PrefabUtility.ApplyPrefabInstance(gameObject, InteractionMode.UserAction);
+                        PrefabUtility.ApplyPrefabInstance(gameObject, InteractionMode.AutomatedAction);
                         EditorUtility.SetDirty(prefabAsset);
                         AssetDatabase.SaveAssets();
                         return $"Prefabインスタンス '{objectName}' の全ての変更をソースPrefab '{assetPath}' に適用しました";
@@ -253,7 +253,7 @@ namespace UnityNaturalMCPExtension.Editor
                     // 一旦全体適用を使用
                     try
                     {
-                        PrefabUtility.ApplyPrefabInstance(gameObject, InteractionMode.UserAction);
+                        PrefabUtility.ApplyPrefabInstance(gameObject, InteractionMode.AutomatedAction);
                         EditorUtility.SetDirty(prefabAsset);
                         AssetDatabase.SaveAssets();
                         return $"Prefabインスタンス '{objectName}' の変更をソースPrefab '{assetPath}' に適用しました（指定されたプロパティパス: '{propertyPaths}'）";
@@ -309,7 +309,7 @@ namespace UnityNaturalMCPExtension.Editor
                     // 全ての変更を戻す
                     try
                     {
-                        PrefabUtility.RevertPrefabInstance(gameObject, InteractionMode.UserAction);
+                        PrefabUtility.RevertPrefabInstance(gameObject, InteractionMode.AutomatedAction);
                         return $"Prefabインスタンス '{objectName}' の全ての変更をソースPrefab '{assetPath}' の状態に戻しました";
                     }
                     catch (Exception revertEx)
@@ -324,7 +324,7 @@ namespace UnityNaturalMCPExtension.Editor
                     // プロパティパスの情報は表示用として保持
                     try
                     {
-                        PrefabUtility.RevertPrefabInstance(gameObject, InteractionMode.UserAction);
+                        PrefabUtility.RevertPrefabInstance(gameObject, InteractionMode.AutomatedAction);
                         return $"Prefabインスタンス '{objectName}' の変更をソースPrefab '{assetPath}' の状態に戻しました（指定されたプロパティパス: '{propertyPaths}'）";
                     }
                     catch (Exception revertEx)
