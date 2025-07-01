@@ -135,89 +135,126 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Capture height in pixels (optional, uses Game View size if not specified)")]
             int height = 0,
             [Description("Use actual Game View size (optional, default: true)")]
-            bool useGameViewSize = true)
+            bool useGameViewSize = true,
+            [Description("Camera position [x,y,z] (optional)")]
+            float[] position = null,
+            [Description("Camera rotation in euler angles [x,y,z] (optional)")]
+            float[] rotation = null)
         {
             try
             {
                 await UniTask.SwitchToMainThread();
 
-                // Get the Game View window
-                var gameViewType = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.GameView");
-                if (gameViewType == null)
-                    return "Error: Could not find Game View type";
-
-                var gameView = EditorWindow.GetWindow(gameViewType, false, null, false);
-                if (gameView == null)
-                    return "Error: Could not get Game View window";
-
-                // Get window position and size
-                var windowPosition = gameView.position.position;
-                var windowWidth = (int)gameView.position.width;
-                var windowHeight = (int)gameView.position.height;
-
-                // Determine capture dimensions
-                int captureWidth = width;
-                int captureHeight = height;
-
-                if (useGameViewSize || width <= 0 || height <= 0)
+                // Find main camera or any camera in the scene
+                Camera sourceCamera = Camera.main;
+                GameObject tempCameraCreated = null;
+                
+                if (sourceCamera == null)
                 {
-                    captureWidth = windowWidth;
-                    captureHeight = windowHeight;
+                    sourceCamera = GameObject.FindObjectOfType<Camera>();
+                    if (sourceCamera == null)
+                    {
+                        // Create a temporary camera if none exists
+                        tempCameraCreated = new GameObject("TempCamera");
+                        sourceCamera = tempCameraCreated.AddComponent<Camera>();
+                    }
                 }
 
-                // Capture the Game View pixels using InternalEditorUtility
-                Color[] pixels = InternalEditorUtility.ReadScreenPixel(windowPosition, windowWidth, windowHeight);
-
-                // Create texture from captured pixels
-                var capturedTexture = new Texture2D(windowWidth, windowHeight, TextureFormat.RGBA32, false);
-                capturedTexture.SetPixels(pixels);
-                capturedTexture.Apply();
-
-                // Resize if needed
-                Texture2D finalTexture = capturedTexture;
-                if (captureWidth != windowWidth || captureHeight != windowHeight)
+                // Create a duplicate camera for positioning
+                GameObject duplicateCameraObj = null;
+                Camera originalMainCamera = Camera.main;
+                
+                try
                 {
-                    // Create a temporary render texture for resizing
-                    var tempRenderTexture = new RenderTexture(captureWidth, captureHeight, 24, RenderTextureFormat.ARGB32);
-                    tempRenderTexture.Create();
+                    // If position or rotation is specified, create and set up duplicate camera
+                    if ((position != null && position.Length >= 3) || (rotation != null && rotation.Length >= 3))
+                    {
+                        duplicateCameraObj = GameObject.Instantiate(sourceCamera.gameObject);
+                        duplicateCameraObj.name = "CaptureCamera_Temp";
+                        var captureCamera = duplicateCameraObj.GetComponent<Camera>();
 
-                    // Blit to resize
-                    var previousActive = RenderTexture.active;
-                    RenderTexture.active = tempRenderTexture;
-                    Graphics.Blit(capturedTexture, tempRenderTexture);
+                        // Set camera transform if specified
+                        if (position != null && position.Length >= 3)
+                        {
+                            captureCamera.transform.position = new Vector3(position[0], position[1], position[2]);
+                        }
 
-                    // Read resized pixels
-                    finalTexture = new Texture2D(captureWidth, captureHeight, TextureFormat.RGBA32, false);
-                    finalTexture.ReadPixels(new Rect(0, 0, captureWidth, captureHeight), 0, 0);
-                    finalTexture.Apply();
+                        if (rotation != null && rotation.Length >= 3)
+                        {
+                            captureCamera.transform.eulerAngles = new Vector3(rotation[0], rotation[1], rotation[2]);
+                        }
 
-                    RenderTexture.active = previousActive;
+                        // Set this as the main camera temporarily
+                        captureCamera.tag = "MainCamera";
+                        if (originalMainCamera != null && originalMainCamera != captureCamera)
+                        {
+                            originalMainCamera.tag = "Untagged";
+                        }
+                    }
 
-                    // Cleanup temporary objects
-                    GameObject.DestroyImmediate(tempRenderTexture);
-                    GameObject.DestroyImmediate(capturedTexture);
+                    // Create output directory if it doesn't exist
+                    var projectPath = Path.GetDirectoryName(Application.dataPath);
+                    var outputDirectory = Path.Combine(projectPath, "SceneCapture");
+                    if (!Directory.Exists(outputDirectory))
+                        Directory.CreateDirectory(outputDirectory);
+
+                    // Generate filename with timestamp
+                    var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HHmmss");
+                    var filename = $"gameview_{timestamp}.png";
+                    var relativePath = Path.Combine("SceneCapture", filename);
+                    var fullPath = Path.Combine(outputDirectory, filename);
+
+                    // Delete existing file if it exists
+                    if (File.Exists(fullPath))
+                        File.Delete(fullPath);
+
+                    // 撮影を実行 ※GameViewにフォーカスがない場合、この時点では撮られない
+                    ScreenCapture.CaptureScreenshot(relativePath, 1);
+
+                    // GameViewを取得
+                    var assembly = typeof(UnityEditor.EditorWindow).Assembly;
+                    var type = assembly.GetType("UnityEditor.GameView");
+                    var gameview = EditorWindow.GetWindow(type);
+
+                    // GameViewを再描画
+                    gameview.Repaint();
+
+                    // Wait for the screenshot to be saved
+                    await UniTask.Yield();
+                    
+                    // Check if file was created (with timeout)
+                    var timeout = DateTime.Now.AddSeconds(5);
+                    while (!File.Exists(fullPath) && DateTime.Now < timeout)
+                    {
+                        await UniTask.Delay(100);
+                    }
+
+                    if (File.Exists(fullPath))
+                    {
+                        Debug.Log($"Game View captured successfully: {fullPath}");
+                        return $"Game View captured successfully to: {fullPath}";
+                    }
+                    else
+                    {
+                        return "Error: Screenshot file was not created. Make sure Game View is visible.";
+                    }
                 }
+                finally
+                {
+                    // Restore original main camera tag
+                    if (originalMainCamera != null && duplicateCameraObj != null)
+                    {
+                        originalMainCamera.tag = "MainCamera";
+                    }
 
-                // Create output directory if it doesn't exist
-                var projectPath = Path.GetDirectoryName(Application.dataPath);
-                var outputDirectory = Path.Combine(projectPath, "SceneCapture");
-                if (!Directory.Exists(outputDirectory))
-                    Directory.CreateDirectory(outputDirectory);
-
-                // Generate filename with timestamp
-                var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HHmmss");
-                var filename = $"gameview_{timestamp}.png";
-                var fullPath = Path.Combine(outputDirectory, filename);
-
-                // Save PNG
-                var pngData = finalTexture.EncodeToPNG();
-                File.WriteAllBytes(fullPath, pngData);
-
-                // Cleanup
-                GameObject.DestroyImmediate(finalTexture);
-
-                Debug.Log($"Game View captured successfully: {fullPath}");
-                return $"Game View captured successfully to: {fullPath} (Resolution: {captureWidth}x{captureHeight})";
+                    // Cleanup duplicate camera
+                    if (duplicateCameraObj != null)
+                        GameObject.DestroyImmediate(duplicateCameraObj);
+                        
+                    // Cleanup temp camera if created
+                    if (tempCameraCreated != null)
+                        GameObject.DestroyImmediate(tempCameraCreated);
+                }
             }
             catch (Exception e)
             {
