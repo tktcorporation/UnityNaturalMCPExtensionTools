@@ -7,6 +7,7 @@ using UnityEditor;
 using UnityEngine;
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using UnityEditor.SceneManagement;
 
 namespace UnityNaturalMCPExtension.Editor
 {
@@ -31,17 +32,53 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Velocity over lifetime settings as JSON (optional)")]
             string velocitySettings = null,
             [Description("Name for new particle system (optional, defaults to 'Particle System')")]
-            string particleSystemName = null)
+            string particleSystemName = null,
+            [Description("Configure in Prefab mode context instead of scene (optional, default: false)")]
+            bool inPrefabMode = false)
         {
             try
             {
                 await UniTask.SwitchToMainThread();
 
-                var gameObject = GameObject.Find(objectName);
-                if (gameObject == null)
-                    return $"Error: GameObject '{objectName}' not found";
+                // Check if we're in Prefab mode when requested
+                if (inPrefabMode)
+                {
+                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                    if (prefabStage == null)
+                        return "Error: Prefab mode is not active. Please open a prefab first.";
+                }
 
-                var particleSystem = FindParticleSystem(objectName);
+                // Find the GameObject using the appropriate method
+                GameObject gameObject = null;
+                if (inPrefabMode)
+                {
+                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                    var root = prefabStage.prefabContentsRoot;
+                    if (root.name == objectName)
+                    {
+                        gameObject = root;
+                    }
+                    else
+                    {
+                        foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+                        {
+                            if (child.name == objectName)
+                            {
+                                gameObject = child.gameObject;
+                                break;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    gameObject = GameObject.Find(objectName);
+                }
+                
+                if (gameObject == null)
+                    return $"Error: GameObject '{objectName}' not found{(inPrefabMode ? " in Prefab mode" : " in scene")}";
+
+                var particleSystem = FindParticleSystem(objectName, inPrefabMode);
 
                 if (particleSystem == null && createNew)
                 {
@@ -65,6 +102,13 @@ namespace UnityNaturalMCPExtension.Editor
                 }
 
                 var changes = new List<string>();
+
+                // Stop particle system if it's playing to avoid errors when changing certain properties
+                bool wasPlaying = particleSystem.isPlaying;
+                if (wasPlaying)
+                {
+                    particleSystem.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                }
 
                 // Apply main settings
                 if (!string.IsNullOrEmpty(mainSettings))
@@ -262,6 +306,12 @@ namespace UnityNaturalMCPExtension.Editor
 
                 EditorUtility.SetDirty(particleSystem);
 
+                // Restart particle system if it was playing
+                if (wasPlaying)
+                {
+                    particleSystem.Play();
+                }
+
                 if (changes.Count == 0)
                     return createNew
                         ? $"Created ParticleSystem on '{objectName}' with default settings"
@@ -281,15 +331,25 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Name of the GameObject containing the particle system")]
             string objectName,
             [Description("Action to perform: 'play' or 'stop'")]
-            string action)
+            string action,
+            [Description("Control in Prefab mode context instead of scene (optional, default: false)")]
+            bool inPrefabMode = false)
         {
             try
             {
                 await UniTask.SwitchToMainThread();
 
-                var particleSystem = FindParticleSystem(objectName);
+                // Check if we're in Prefab mode when requested
+                if (inPrefabMode)
+                {
+                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                    if (prefabStage == null)
+                        return "Error: Prefab mode is not active. Please open a prefab first.";
+                }
+
+                var particleSystem = FindParticleSystem(objectName, inPrefabMode);
                 if (particleSystem == null)
-                    return $"Error: No ParticleSystem found on GameObject '{objectName}'";
+                    return $"Error: No ParticleSystem found on GameObject '{objectName}'{(inPrefabMode ? " in Prefab mode" : " in scene")}";
 
                 switch (action?.ToLower())
                 {
@@ -312,9 +372,476 @@ namespace UnityNaturalMCPExtension.Editor
             }
         }
 
-        private ParticleSystem FindParticleSystem(string objectName)
+        [McpServerTool, Description("Get detailed information about a particle system")]
+        public async ValueTask<string> GetParticleSystemInfo(
+            [Description("Name of the GameObject containing the particle system")]
+            string objectName,
+            [Description("Include detailed module information (optional, default: true)")]
+            bool includeModuleDetails = true,
+            [Description("Get info from Prefab mode context instead of scene (optional, default: false)")]
+            bool inPrefabMode = false)
         {
-            var gameObject = GameObject.Find(objectName);
+            try
+            {
+                await UniTask.SwitchToMainThread();
+
+                // Check if we're in Prefab mode when requested
+                if (inPrefabMode)
+                {
+                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                    if (prefabStage == null)
+                        return "Error: Prefab mode is not active. Please open a prefab first.";
+                }
+
+                var particleSystem = FindParticleSystem(objectName, inPrefabMode);
+                if (particleSystem == null)
+                    return $"Error: No ParticleSystem found on GameObject '{objectName}'{(inPrefabMode ? " in Prefab mode" : " in scene")}";
+
+                var info = new Dictionary<string, object>();
+                info["objectName"] = objectName;
+                info["particleCount"] = particleSystem.particleCount;
+                info["isPlaying"] = particleSystem.isPlaying;
+                info["isPaused"] = particleSystem.isPaused;
+                info["isStopped"] = particleSystem.isStopped;
+                info["isEmitting"] = particleSystem.isEmitting;
+                info["time"] = particleSystem.time;
+
+                if (includeModuleDetails)
+                {
+                    // Main Module
+                    var main = particleSystem.main;
+                    var mainInfo = new Dictionary<string, object>
+                    {
+                        ["duration"] = main.duration,
+                        ["loop"] = main.loop,
+                        ["prewarm"] = main.prewarm,
+                        ["startDelay"] = GetMinMaxCurveValue(main.startDelay),
+                        ["startLifetime"] = GetMinMaxCurveValue(main.startLifetime),
+                        ["startSpeed"] = GetMinMaxCurveValue(main.startSpeed),
+                        ["startSize"] = GetMinMaxCurveValue(main.startSize),
+                        ["startRotation"] = GetMinMaxCurveValue(main.startRotation),
+                        ["flipRotation"] = main.flipRotation,
+                        ["startColor"] = GetMinMaxGradientValue(main.startColor),
+                        ["gravityModifier"] = GetMinMaxCurveValue(main.gravityModifier),
+                        ["simulationSpace"] = main.simulationSpace.ToString(),
+                        ["simulationSpeed"] = main.simulationSpeed,
+                        ["scalingMode"] = main.scalingMode.ToString(),
+                        ["playOnAwake"] = main.playOnAwake,
+                        ["maxParticles"] = main.maxParticles,
+                        ["emitterVelocityMode"] = main.emitterVelocityMode.ToString(),
+                        ["stopAction"] = main.stopAction.ToString()
+                    };
+                    info["mainModule"] = mainInfo;
+
+                    // Shape Module
+                    var shape = particleSystem.shape;
+                    var shapeInfo = new Dictionary<string, object>
+                    {
+                        ["enabled"] = shape.enabled,
+                        ["shapeType"] = shape.shapeType.ToString(),
+                        ["angle"] = shape.angle,
+                        ["radius"] = shape.radius,
+                        ["radiusThickness"] = shape.radiusThickness,
+                        ["arc"] = shape.arc,
+                        ["arcMode"] = shape.arcMode.ToString(),
+                        ["arcSpread"] = shape.arcSpread,
+                        ["rotation"] = Vector3ToArray(shape.rotation),
+                        ["scale"] = Vector3ToArray(shape.scale),
+                        ["position"] = Vector3ToArray(shape.position),
+                        ["alignToDirection"] = shape.alignToDirection,
+                        ["randomDirectionAmount"] = shape.randomDirectionAmount,
+                        ["sphericalDirectionAmount"] = shape.sphericalDirectionAmount
+                    };
+                    info["shapeModule"] = shapeInfo;
+
+                    // Emission Module
+                    var emission = particleSystem.emission;
+                    var emissionInfo = new Dictionary<string, object>
+                    {
+                        ["enabled"] = emission.enabled,
+                        ["rateOverTime"] = GetMinMaxCurveValue(emission.rateOverTime),
+                        ["rateOverDistance"] = GetMinMaxCurveValue(emission.rateOverDistance),
+                        ["burstCount"] = emission.burstCount
+                    };
+                    
+                    // Get burst information
+                    if (emission.burstCount > 0)
+                    {
+                        var bursts = new ParticleSystem.Burst[emission.burstCount];
+                        emission.GetBursts(bursts);
+                        var burstList = new List<Dictionary<string, object>>();
+                        foreach (var burst in bursts)
+                        {
+                            burstList.Add(new Dictionary<string, object>
+                            {
+                                ["time"] = burst.time,
+                                ["count"] = GetMinMaxCurveValue(burst.count),
+                                ["cycleCount"] = burst.cycleCount,
+                                ["repeatInterval"] = burst.repeatInterval,
+                                ["probability"] = burst.probability
+                            });
+                        }
+                        emissionInfo["bursts"] = burstList;
+                    }
+                    info["emissionModule"] = emissionInfo;
+
+                    // Velocity over Lifetime Module
+                    var velocity = particleSystem.velocityOverLifetime;
+                    var velocityInfo = new Dictionary<string, object>
+                    {
+                        ["enabled"] = velocity.enabled,
+                        ["space"] = velocity.space.ToString(),
+                        ["x"] = GetMinMaxCurveValue(velocity.x),
+                        ["y"] = GetMinMaxCurveValue(velocity.y),
+                        ["z"] = GetMinMaxCurveValue(velocity.z),
+                        ["speedModifier"] = GetMinMaxCurveValue(velocity.speedModifier),
+                        ["orbitalX"] = GetMinMaxCurveValue(velocity.orbitalX),
+                        ["orbitalY"] = GetMinMaxCurveValue(velocity.orbitalY),
+                        ["orbitalZ"] = GetMinMaxCurveValue(velocity.orbitalZ),
+                        ["orbitalOffsetX"] = GetMinMaxCurveValue(velocity.orbitalOffsetX),
+                        ["orbitalOffsetY"] = GetMinMaxCurveValue(velocity.orbitalOffsetY),
+                        ["orbitalOffsetZ"] = GetMinMaxCurveValue(velocity.orbitalOffsetZ),
+                        ["radial"] = GetMinMaxCurveValue(velocity.radial)
+                    };
+                    info["velocityOverLifetimeModule"] = velocityInfo;
+
+                    // Color over Lifetime Module
+                    var colorOverLifetime = particleSystem.colorOverLifetime;
+                    var colorInfo = new Dictionary<string, object>
+                    {
+                        ["enabled"] = colorOverLifetime.enabled,
+                        ["color"] = GetMinMaxGradientValue(colorOverLifetime.color)
+                    };
+                    info["colorOverLifetimeModule"] = colorInfo;
+
+                    // Size over Lifetime Module
+                    var sizeOverLifetime = particleSystem.sizeOverLifetime;
+                    var sizeInfo = new Dictionary<string, object>
+                    {
+                        ["enabled"] = sizeOverLifetime.enabled,
+                        ["size"] = GetMinMaxCurveValue(sizeOverLifetime.size),
+                        ["sizeMultiplier"] = sizeOverLifetime.sizeMultiplier,
+                        ["x"] = GetMinMaxCurveValue(sizeOverLifetime.x),
+                        ["y"] = GetMinMaxCurveValue(sizeOverLifetime.y),
+                        ["z"] = GetMinMaxCurveValue(sizeOverLifetime.z),
+                        ["separateAxes"] = sizeOverLifetime.separateAxes
+                    };
+                    info["sizeOverLifetimeModule"] = sizeInfo;
+
+                    // Rotation over Lifetime Module
+                    var rotationOverLifetime = particleSystem.rotationOverLifetime;
+                    var rotationInfo = new Dictionary<string, object>
+                    {
+                        ["enabled"] = rotationOverLifetime.enabled,
+                        ["x"] = GetMinMaxCurveValue(rotationOverLifetime.x),
+                        ["y"] = GetMinMaxCurveValue(rotationOverLifetime.y),
+                        ["z"] = GetMinMaxCurveValue(rotationOverLifetime.z),
+                        ["separateAxes"] = rotationOverLifetime.separateAxes
+                    };
+                    info["rotationOverLifetimeModule"] = rotationInfo;
+
+                    // Force over Lifetime Module
+                    var forceOverLifetime = particleSystem.forceOverLifetime;
+                    var forceInfo = new Dictionary<string, object>
+                    {
+                        ["enabled"] = forceOverLifetime.enabled,
+                        ["space"] = forceOverLifetime.space.ToString(),
+                        ["x"] = GetMinMaxCurveValue(forceOverLifetime.x),
+                        ["y"] = GetMinMaxCurveValue(forceOverLifetime.y),
+                        ["z"] = GetMinMaxCurveValue(forceOverLifetime.z),
+                        ["randomized"] = forceOverLifetime.randomized
+                    };
+                    info["forceOverLifetimeModule"] = forceInfo;
+
+                    // Noise Module
+                    var noise = particleSystem.noise;
+                    var noiseInfo = new Dictionary<string, object>
+                    {
+                        ["enabled"] = noise.enabled,
+                        ["strength"] = GetMinMaxCurveValue(noise.strength),
+                        ["strengthX"] = GetMinMaxCurveValue(noise.strengthX),
+                        ["strengthY"] = GetMinMaxCurveValue(noise.strengthY),
+                        ["strengthZ"] = GetMinMaxCurveValue(noise.strengthZ),
+                        ["frequency"] = noise.frequency,
+                        ["damping"] = noise.damping,
+                        ["octaveCount"] = noise.octaveCount,
+                        ["octaveMultiplier"] = noise.octaveMultiplier,
+                        ["octaveScale"] = noise.octaveScale,
+                        ["quality"] = noise.quality.ToString(),
+                        ["scrollSpeed"] = GetMinMaxCurveValue(noise.scrollSpeed),
+                        ["remapEnabled"] = noise.remapEnabled,
+                        ["remap"] = GetMinMaxCurveValue(noise.remap),
+                        ["remapX"] = GetMinMaxCurveValue(noise.remapX),
+                        ["remapY"] = GetMinMaxCurveValue(noise.remapY),
+                        ["remapZ"] = GetMinMaxCurveValue(noise.remapZ),
+                        ["positionAmount"] = GetMinMaxCurveValue(noise.positionAmount),
+                        ["rotationAmount"] = GetMinMaxCurveValue(noise.rotationAmount),
+                        ["sizeAmount"] = GetMinMaxCurveValue(noise.sizeAmount)
+                    };
+                    info["noiseModule"] = noiseInfo;
+
+                    // External Forces Module
+                    var externalForces = particleSystem.externalForces;
+                    var externalForcesInfo = new Dictionary<string, object>
+                    {
+                        ["enabled"] = externalForces.enabled,
+                        ["multiplier"] = externalForces.multiplier,
+                        ["multiplierCurve"] = GetMinMaxCurveValue(externalForces.multiplierCurve),
+                        ["influenceFilter"] = externalForces.influenceFilter.ToString(),
+                        ["influenceCount"] = externalForces.influenceCount
+                    };
+                    info["externalForcesModule"] = externalForcesInfo;
+
+                    // Collision Module
+                    var collision = particleSystem.collision;
+                    var collisionInfo = new Dictionary<string, object>
+                    {
+                        ["enabled"] = collision.enabled,
+                        ["type"] = collision.type.ToString(),
+                        ["mode"] = collision.mode.ToString(),
+                        ["dampen"] = GetMinMaxCurveValue(collision.dampen),
+                        ["bounce"] = GetMinMaxCurveValue(collision.bounce),
+                        ["lifetimeLoss"] = GetMinMaxCurveValue(collision.lifetimeLoss),
+                        ["minKillSpeed"] = collision.minKillSpeed,
+                        ["maxKillSpeed"] = collision.maxKillSpeed,
+                        ["collidesWith"] = collision.collidesWith.value,
+                        ["enableDynamicColliders"] = collision.enableDynamicColliders,
+                        ["maxCollisionShapes"] = collision.maxCollisionShapes,
+                        ["quality"] = collision.quality.ToString(),
+                        ["voxelSize"] = collision.voxelSize,
+                        ["radiusScale"] = collision.radiusScale,
+                        ["sendCollisionMessages"] = collision.sendCollisionMessages
+                    };
+                    info["collisionModule"] = collisionInfo;
+
+                    // Sub Emitters Module
+                    var subEmitters = particleSystem.subEmitters;
+                    var subEmittersInfo = new Dictionary<string, object>
+                    {
+                        ["enabled"] = subEmitters.enabled,
+                        ["subEmittersCount"] = subEmitters.subEmittersCount
+                    };
+                    info["subEmittersModule"] = subEmittersInfo;
+
+                    // Texture Sheet Animation Module
+                    var textureSheetAnimation = particleSystem.textureSheetAnimation;
+                    var textureSheetInfo = new Dictionary<string, object>
+                    {
+                        ["enabled"] = textureSheetAnimation.enabled,
+                        ["mode"] = textureSheetAnimation.mode.ToString(),
+                        ["numTilesX"] = textureSheetAnimation.numTilesX,
+                        ["numTilesY"] = textureSheetAnimation.numTilesY,
+                        ["animation"] = textureSheetAnimation.animation.ToString(),
+                        ["frameOverTime"] = GetMinMaxCurveValue(textureSheetAnimation.frameOverTime),
+                        ["startFrame"] = GetMinMaxCurveValue(textureSheetAnimation.startFrame),
+                        ["cycleCount"] = textureSheetAnimation.cycleCount,
+                        ["rowIndex"] = textureSheetAnimation.rowIndex,
+                        ["uvChannelMask"] = textureSheetAnimation.uvChannelMask.ToString()
+                    };
+                    info["textureSheetAnimationModule"] = textureSheetInfo;
+
+                    // Lights Module
+                    var lights = particleSystem.lights;
+                    var lightsInfo = new Dictionary<string, object>
+                    {
+                        ["enabled"] = lights.enabled,
+                        ["ratio"] = lights.ratio,
+                        ["useRandomDistribution"] = lights.useRandomDistribution,
+                        ["light"] = lights.light != null ? lights.light.name : "None",
+                        ["useParticleColor"] = lights.useParticleColor,
+                        ["sizeAffectsRange"] = lights.sizeAffectsRange,
+                        ["alphaAffectsIntensity"] = lights.alphaAffectsIntensity,
+                        ["range"] = GetMinMaxCurveValue(lights.range),
+                        ["rangeMultiplier"] = lights.rangeMultiplier,
+                        ["intensity"] = GetMinMaxCurveValue(lights.intensity),
+                        ["intensityMultiplier"] = lights.intensityMultiplier,
+                        ["maxLights"] = lights.maxLights
+                    };
+                    info["lightsModule"] = lightsInfo;
+
+                    // Trails Module
+                    var trails = particleSystem.trails;
+                    var trailsInfo = new Dictionary<string, object>
+                    {
+                        ["enabled"] = trails.enabled,
+                        ["mode"] = trails.mode.ToString(),
+                        ["ratio"] = trails.ratio,
+                        ["lifetime"] = GetMinMaxCurveValue(trails.lifetime),
+                        ["lifetimeMultiplier"] = trails.lifetimeMultiplier,
+                        ["minVertexDistance"] = trails.minVertexDistance,
+                        ["textureMode"] = trails.textureMode.ToString(),
+                        ["worldSpace"] = trails.worldSpace,
+                        ["dieWithParticles"] = trails.dieWithParticles,
+                        ["sizeAffectsWidth"] = trails.sizeAffectsWidth,
+                        ["sizeAffectsLifetime"] = trails.sizeAffectsLifetime,
+                        ["inheritParticleColor"] = trails.inheritParticleColor,
+                        ["colorOverLifetime"] = GetMinMaxGradientValue(trails.colorOverLifetime),
+                        ["widthOverTrail"] = GetMinMaxCurveValue(trails.widthOverTrail),
+                        ["widthOverTrailMultiplier"] = trails.widthOverTrailMultiplier,
+                        ["colorOverTrail"] = GetMinMaxGradientValue(trails.colorOverTrail),
+                        ["generateLightingData"] = trails.generateLightingData,
+                        ["ribbonCount"] = trails.ribbonCount,
+                        ["shadowBias"] = trails.shadowBias,
+                        ["splitSubEmitterRibbons"] = trails.splitSubEmitterRibbons
+                    };
+                    info["trailsModule"] = trailsInfo;
+
+                    // Custom Data Module
+                    var customData = particleSystem.customData;
+                    var customDataInfo = new Dictionary<string, object>
+                    {
+                        ["enabled"] = customData.enabled
+                    };
+                    info["customDataModule"] = customDataInfo;
+
+                    // Renderer
+                    var renderer = particleSystem.GetComponent<ParticleSystemRenderer>();
+                    if (renderer != null)
+                    {
+                        var rendererInfo = new Dictionary<string, object>
+                        {
+                            ["renderMode"] = renderer.renderMode.ToString(),
+                            ["material"] = renderer.sharedMaterial != null ? renderer.sharedMaterial.name : "None",
+                            ["trailMaterial"] = renderer.trailMaterial != null ? renderer.trailMaterial.name : "None",
+                            ["sortMode"] = renderer.sortMode.ToString(),
+                            ["sortingFudge"] = renderer.sortingFudge,
+                            ["minParticleSize"] = renderer.minParticleSize,
+                            ["maxParticleSize"] = renderer.maxParticleSize,
+                            ["alignment"] = renderer.alignment.ToString(),
+                            ["flip"] = Vector3ToArray(renderer.flip),
+                            ["allowRoll"] = renderer.allowRoll,
+                            ["pivot"] = Vector3ToArray(renderer.pivot),
+                            ["maskInteraction"] = renderer.maskInteraction.ToString(),
+                            ["enableGPUInstancing"] = renderer.enableGPUInstancing,
+                            ["shadowCastingMode"] = renderer.shadowCastingMode.ToString(),
+                            ["receiveShadows"] = renderer.receiveShadows,
+                            ["shadowBias"] = renderer.shadowBias,
+                            ["motionVectorGenerationMode"] = renderer.motionVectorGenerationMode.ToString(),
+                            ["sortingLayerID"] = renderer.sortingLayerID,
+                            ["sortingOrder"] = renderer.sortingOrder,
+                            ["lightProbeUsage"] = renderer.lightProbeUsage.ToString(),
+                            ["reflectionProbeUsage"] = renderer.reflectionProbeUsage.ToString()
+                        };
+                        info["renderer"] = rendererInfo;
+                    }
+                }
+
+                return JsonConvert.SerializeObject(info, Formatting.Indented);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Error getting particle system info: {e}");
+                return $"Error getting particle system info: {e.Message}";
+            }
+        }
+
+        private object GetMinMaxCurveValue(ParticleSystem.MinMaxCurve curve)
+        {
+            var result = new Dictionary<string, object>
+            {
+                ["mode"] = curve.mode.ToString()
+            };
+
+            switch (curve.mode)
+            {
+                case ParticleSystemCurveMode.Constant:
+                    result["constant"] = curve.constant;
+                    break;
+                case ParticleSystemCurveMode.TwoConstants:
+                    result["constantMin"] = curve.constantMin;
+                    result["constantMax"] = curve.constantMax;
+                    break;
+                case ParticleSystemCurveMode.Curve:
+                    result["curveMultiplier"] = curve.curveMultiplier;
+                    result["curveKeys"] = curve.curve?.keys?.Length ?? 0;
+                    break;
+                case ParticleSystemCurveMode.TwoCurves:
+                    result["curveMultiplier"] = curve.curveMultiplier;
+                    result["curveMinKeys"] = curve.curveMin?.keys?.Length ?? 0;
+                    result["curveMaxKeys"] = curve.curveMax?.keys?.Length ?? 0;
+                    break;
+            }
+
+            return result;
+        }
+
+        private object GetMinMaxGradientValue(ParticleSystem.MinMaxGradient gradient)
+        {
+            var result = new Dictionary<string, object>
+            {
+                ["mode"] = gradient.mode.ToString()
+            };
+
+            switch (gradient.mode)
+            {
+                case ParticleSystemGradientMode.Color:
+                    var color = gradient.color;
+                    result["color"] = new float[] { color.r, color.g, color.b, color.a };
+                    break;
+                case ParticleSystemGradientMode.TwoColors:
+                    var minColor = gradient.colorMin;
+                    var maxColor = gradient.colorMax;
+                    result["colorMin"] = new float[] { minColor.r, minColor.g, minColor.b, minColor.a };
+                    result["colorMax"] = new float[] { maxColor.r, maxColor.g, maxColor.b, maxColor.a };
+                    break;
+                case ParticleSystemGradientMode.Gradient:
+                case ParticleSystemGradientMode.TwoGradients:
+                    result["gradientKeys"] = gradient.gradient?.colorKeys?.Length ?? 0;
+                    break;
+                case ParticleSystemGradientMode.RandomColor:
+                    result["randomColor"] = true;
+                    break;
+            }
+
+            return result;
+        }
+
+        private object Vector3ToArray(Vector3 v)
+        {
+            return new float[] { v.x, v.y, v.z };
+        }
+
+        private object Vector2ToArray(Vector2 v)
+        {
+            return new float[] { v.x, v.y };
+        }
+
+        private ParticleSystem FindParticleSystem(string objectName, bool inPrefabMode = false)
+        {
+            GameObject gameObject = null;
+            
+            if (inPrefabMode)
+            {
+                var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                if (prefabStage == null)
+                {
+                    Debug.LogError("Prefab mode is not active");
+                    return null;
+                }
+
+                var root = prefabStage.prefabContentsRoot;
+                if (root.name == objectName)
+                {
+                    gameObject = root;
+                }
+                else
+                {
+                    // Search in children
+                    foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+                    {
+                        if (child.name == objectName)
+                        {
+                            gameObject = child.gameObject;
+                            break;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                gameObject = GameObject.Find(objectName);
+            }
+            
             if (gameObject == null)
                 return null;
 
