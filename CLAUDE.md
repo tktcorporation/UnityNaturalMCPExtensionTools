@@ -6,17 +6,7 @@ This package provides unified custom MCP (Model Context Protocol) tools that ext
 
 Unity Natural MCP サーバーの機能を拡張し、Unityエディタ操作の包括的な自動化を実現する統合型カスタムMCPツール群です。バージョン0.8.0では、Scene管理、Prefab編集モード、スクリーンショット機能を追加し、包括的な開発支援を実現しています。
 
-### v0.8.2 アップデート (2025-01-02)
-- **ComponentPropertyManagerの導入**: 型変換とプロパティ設定ロジックを一元化
-- **McpUnifiedObjectToolのリファクタリング**: 約500行のコード削減を実現
-- **型安全性の向上**: Unity特有の型変換処理を統一化
-
-### v0.8.1 アップデート (2025-01-02)
-- **共通基盤クラスの導入**: すべてのツールが`McpToolBase`を継承し、統一されたエラーハンドリングを実現
-- **コード品質の向上**: 約30-35%のコード削減と保守性の向上
-- **メッセージの標準化**: 成功・エラーメッセージの生成が統一フォーマットに
-
-## ツール構成（v0.8.0 - 包括的開発支援版）
+## ツール構成
 
 ### 実装済みツール
 
@@ -30,18 +20,6 @@ Unity Natural MCP サーバーの機能を拡張し、Unityエディタ操作の
 | **McpSceneManagementTool** | Scene作成・管理・操作 | CreateScene, SaveScene, LoadScene, ListScenes, GetActiveSceneInfo, CloseScene | 6 |
 | **McpProjectSettingsTool** | プロジェクト設定管理 | ManageProjectLayers | 1 |
 | **合計** | **全領域カバー** | **全26メソッド** | **26** |
-
-### 新機能（v0.8.0）
-
-- **包括的開発支援**: Scene管理、Prefab編集モード、スクリーンショット機能の統合
-- **自動化レベル向上**: 従来約30%から約95%の自動化を実現
-- **統合ユーティリティ**: `McpToolUtilities.cs`による共通機能の提供
-- **プロジェクト設定管理**: レイヤー管理など、プロジェクトレベルの設定操作
-
-### 自動化レベル
-
-- **従来（Unity標準MCPツールのみ）**: 約30%の自動化
-- **拡張後（カスタムツール群v0.8.0）**: 約95%の自動化
 
 ### ディレクトリ構造
 
@@ -259,45 +237,3 @@ public async ValueTask<string> ConfigureComponent(
     }, "ConfigureComponent", inPrefabMode);
 }
 ```
-
-## 変更履歴
-
-### v0.8.2 (2025-01-02)
-- **ComponentPropertyManager の導入**
-  - 型変換とプロパティ設定ロジックを一元管理する新しいクラス
-  - Unity特有の型（Vector系、Color、Quaternion、LayerMask等）の自動変換
-  - ネストされたプロパティへの対応（ドット記法）
-  - プロパティ/フィールドの自動検出と設定
-- **McpUnifiedObjectTool の大規模リファクタリング**
-  - 12個の重複メソッドを削除（約500行のコード削減）
-  - ComponentPropertyManagerを使用するように更新
-  - ConfigureComponentメソッドの処理を簡潔化
-- **型安全性とエラーハンドリングの向上**
-  - PropertySetResult構造体による詳細なエラー情報
-  - 存在しないプロパティに対する適切なエラーメッセージと候補表示
-  - 部分的な成功の適切な処理（一部プロパティのみ設定成功）
-
-### v0.8.1 (2025-01-02)
-- **共通基盤クラス McpToolBase の導入**
-  - すべてのツールクラスが継承し、統一されたエラーハンドリングを実現
-  - ExecuteOperationメソッドによる標準化された操作実行
-  - Prefabモード/シーンモードの自動判別と適切な処理
-- **McpToolUtilities の拡張**
-  - メッセージ生成の標準化（CreateSuccessMessage/CreateErrorMessage）
-  - コンテキスト認識機能の追加
-- **コード品質の向上**
-  - 約30-35%のコード削減
-  - 重複コードの排除（エラーハンドリング、Prefabモード検証など）
-  - 保守性と可読性の大幅な向上
-
-### v0.8.0
-- Scene管理、Prefab編集モード、スクリーンショット機能の追加
-- 包括的な開発支援の実現
-
-## ライセンス
-
-[プロジェクトのライセンスに準拠]
-
-## 貢献方法
-
-[貢献ガイドラインへのリンク]
