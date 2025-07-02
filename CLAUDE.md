@@ -6,6 +6,11 @@ This package provides unified custom MCP (Model Context Protocol) tools that ext
 
 Unity Natural MCP サーバーの機能を拡張し、Unityエディタ操作の包括的な自動化を実現する統合型カスタムMCPツール群です。バージョン0.8.0では、Scene管理、Prefab編集モード、スクリーンショット機能を追加し、包括的な開発支援を実現しています。
 
+### v0.8.2 アップデート (2025-01-02)
+- **ComponentPropertyManagerの導入**: 型変換とプロパティ設定ロジックを一元化
+- **McpUnifiedObjectToolのリファクタリング**: 約500行のコード削減を実現
+- **型安全性の向上**: Unity特有の型変換処理を統一化
+
 ### v0.8.1 アップデート (2025-01-02)
 - **共通基盤クラスの導入**: すべてのツールが`McpToolBase`を継承し、統一されたエラーハンドリングを実現
 - **コード品質の向上**: 約30-35%のコード削減と保守性の向上
@@ -59,7 +64,8 @@ com.sack-kazu.unity-natural-mcp-extension-tools/
 │   ├── McpProjectSettingsTool.cs # プロジェクト設定管理
 │   ├── McpProjectSettingsToolBuilder.cs
 │   ├── McpToolBase.cs          # 共通基盤クラス (v0.8.1新規)
-│   └── McpToolUtilities.cs      # 共通ユーティリティ (v0.8.1拡張)
+│   ├── McpToolUtilities.cs      # 共通ユーティリティ (v0.8.1拡張)
+│   └── ComponentPropertyManager.cs # 型変換・プロパティ設定管理 (v0.8.2新規)
 ├── Runtime/                    # ScriptableObjectアセット
 │   ├── McpUnifiedObjectToolBuilder.asset
 │   ├── McpUnifiedAssetToolBuilder.asset
@@ -138,6 +144,19 @@ Unity Package Manager を使用してこのパッケージをインストール�
 - `ValidateContext`: コンテキスト検証
 - `FindComponent<T>`: ジェネリックコンポーネント検索
 
+#### ComponentPropertyManager (v0.8.2新規)
+型変換とプロパティ設定を統一管理：
+- `SetProperty`: コンポーネントのプロパティ/フィールドを自動的に検出して設定
+- `SetNestedProperty`: ドット記法によるネストされたプロパティの設定（例: "material.color"）
+- `ResolveComponentType`: コンポーネント型の解決とキャッシュ機能
+- `GetComponentSuggestions`: 類似したコンポーネント名の提案（Levenshtein距離による）
+- **自動型変換**: Unity特有の型に対応
+  - Vector2/3/4、Color、Quaternion
+  - LayerMask（文字列または数値から）
+  - Unity Object参照（GameObject、Transform、Component）
+  - Enum型の文字列/数値変換
+  - JToken/JArrayからの自動変換
+
 ### 非同期処理
 
 - UniTask を使用してメインスレッドとの同期を管理
@@ -164,7 +183,7 @@ Unity Package Manager を使用してこのパッケージをインストール�
 3. Runtime フォルダにツールビルダーの ScriptableObject アセットを作成
 4. Unity エディタを再起動してツールを登録
 
-### v0.8.1 推奨実装パターン
+### v0.8.2 推奨実装パターン
 
 ```csharp
 [McpServerToolType, Description("新しいツールの説明")]
@@ -196,7 +215,67 @@ internal sealed class McpNewTool : McpToolBase
 }
 ```
 
+#### コンポーネントプロパティ設定の例 (v0.8.2)
+
+```csharp
+// ConfigureComponentメソッドの使用例
+public async ValueTask<string> ConfigureComponent(
+    string objectName,
+    string componentType,
+    string properties = null,
+    bool inPrefabMode = false)
+{
+    return await ExecuteOperation(async () =>
+    {
+        var gameObject = await FindGameObjectSafe(objectName, inPrefabMode);
+        var compType = ComponentPropertyManager.ResolveComponentType(componentType);
+        
+        if (compType == null)
+        {
+            var suggestions = ComponentPropertyManager.GetComponentSuggestions(componentType);
+            var suggestionText = suggestions.Any() ? $" Did you mean: {string.Join(", ", suggestions)}?" : "";
+            return $"Error: Component type '{componentType}' not found.{suggestionText}";
+        }
+        
+        // プロパティ設定
+        if (!string.IsNullOrEmpty(properties))
+        {
+            var propsDict = JsonConvert.DeserializeObject<Dictionary<string, object>>(properties);
+            foreach (var prop in propsDict)
+            {
+                var result = prop.Key.Contains(".")
+                    ? ComponentPropertyManager.SetNestedProperty(component, prop.Key, prop.Value, inPrefabMode)
+                    : ComponentPropertyManager.SetProperty(component, prop.Key, prop.Value, inPrefabMode);
+                
+                // エラーハンドリング
+                if (!result.Success)
+                {
+                    errors.Add($"{prop.Key}: {result.ErrorMessage}");
+                }
+            }
+        }
+        
+        return McpToolUtilities.CreateSuccessMessage("Component configured", objectName);
+    }, "ConfigureComponent", inPrefabMode);
+}
+```
+
 ## 変更履歴
+
+### v0.8.2 (2025-01-02)
+- **ComponentPropertyManager の導入**
+  - 型変換とプロパティ設定ロジックを一元管理する新しいクラス
+  - Unity特有の型（Vector系、Color、Quaternion、LayerMask等）の自動変換
+  - ネストされたプロパティへの対応（ドット記法）
+  - プロパティ/フィールドの自動検出と設定
+- **McpUnifiedObjectTool の大規模リファクタリング**
+  - 12個の重複メソッドを削除（約500行のコード削減）
+  - ComponentPropertyManagerを使用するように更新
+  - ConfigureComponentメソッドの処理を簡潔化
+- **型安全性とエラーハンドリングの向上**
+  - PropertySetResult構造体による詳細なエラー情報
+  - 存在しないプロパティに対する適切なエラーメッセージと候補表示
+  - 部分的な成功の適切な処理（一部プロパティのみ設定成功）
 
 ### v0.8.1 (2025-01-02)
 - **共通基盤クラス McpToolBase の導入**
