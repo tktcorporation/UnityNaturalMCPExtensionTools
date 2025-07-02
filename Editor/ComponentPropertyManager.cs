@@ -351,13 +351,35 @@ namespace UnityNaturalMCPExtension.Editor
                 return Convert.ChangeType(value, targetType);
             }
             
-            // Handle LayerMask
+            // Handle LayerMask (string only for safety)
             if (targetType == typeof(LayerMask))
             {
-                if (value is int intValue)
-                    return (LayerMask)intValue;
                 if (value is string layerName)
-                    return (LayerMask)(1 << LayerMask.NameToLayer(layerName));
+                {
+                    var layerIndex = LayerMask.NameToLayer(layerName);
+                    if (layerIndex >= 0)
+                        return (LayerMask)(1 << layerIndex);
+                    else
+                        throw new ArgumentException($"Layer '{layerName}' not found");
+                }
+                else
+                {
+                    throw new ArgumentException("LayerMask values must be provided as layer name strings, not integers");
+                }
+            }
+            
+            // Handle arrays
+            if (targetType.IsArray)
+            {
+                var elementType = targetType.GetElementType();
+                return ConvertToArray(value, elementType, inPrefabMode);
+            }
+            
+            // Handle generic lists
+            if (targetType.IsGenericType && targetType.GetGenericTypeDefinition() == typeof(List<>))
+            {
+                var elementType = targetType.GetGenericArguments()[0];
+                return ConvertToList(value, elementType, inPrefabMode);
             }
             
             return value;
@@ -368,6 +390,20 @@ namespace UnityNaturalMCPExtension.Editor
             if (jToken.Type == JTokenType.Array)
             {
                 var array = jToken as JArray;
+                
+                // Handle array types
+                if (targetType.IsArray)
+                {
+                    return array; // Will be handled by ConvertToArray
+                }
+                
+                // Handle List types
+                if (targetType.IsGenericType && targetType.GetGenericTypeDefinition() == typeof(List<>))
+                {
+                    return array; // Will be handled by ConvertToList
+                }
+                
+                // Handle specific Unity types
                 if (targetType == typeof(Vector2) && array.Count >= 2)
                 {
                     return new Vector2(array[0].Value<float>(), array[1].Value<float>());
@@ -459,6 +495,49 @@ namespace UnityNaturalMCPExtension.Editor
         
         private static UnityEngine.Object ResolveObjectReference(string objectName, Type targetType, bool inPrefabMode)
         {
+            // Handle Material assets first
+            if (targetType == typeof(Material) || typeof(Material).IsAssignableFrom(targetType))
+            {
+                // Search for materials by name
+                var materials = Resources.FindObjectsOfTypeAll<Material>();
+                var foundMaterial = materials.FirstOrDefault(m => m.name == objectName);
+                if (foundMaterial != null)
+                    return foundMaterial;
+                
+                // Also search in project assets
+                var guids = AssetDatabase.FindAssets($"{objectName} t:Material");
+                foreach (var guid in guids)
+                {
+                    var path = AssetDatabase.GUIDToAssetPath(guid);
+                    var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+                    if (material != null && material.name == objectName)
+                        return material;
+                }
+                return null;
+            }
+            
+            // Handle other asset types
+            if (typeof(ScriptableObject).IsAssignableFrom(targetType) || typeof(UnityEngine.Object).IsAssignableFrom(targetType))
+            {
+                // Search for assets by type and name
+                var assets = Resources.FindObjectsOfTypeAll(targetType);
+                var foundAsset = assets.FirstOrDefault(a => a.name == objectName);
+                if (foundAsset != null)
+                    return foundAsset;
+                
+                // Search in project assets
+                var typeName = targetType.Name;
+                var guids = AssetDatabase.FindAssets($"{objectName} t:{typeName}");
+                foreach (var guid in guids)
+                {
+                    var path = AssetDatabase.GUIDToAssetPath(guid);
+                    var asset = AssetDatabase.LoadAssetAtPath(path, targetType);
+                    if (asset != null && asset.name == objectName)
+                        return asset;
+                }
+            }
+            
+            // Handle GameObjects and Components
             GameObject foundObject = null;
             
             // Find the GameObject
@@ -610,6 +689,146 @@ namespace UnityNaturalMCPExtension.Editor
             }
 
             return matrix[s1.Length, s2.Length];
+        }
+        
+        /// <summary>
+        /// Converts a value to an array of the specified element type
+        /// </summary>
+        private static object ConvertToArray(object value, Type elementType, bool inPrefabMode)
+        {
+            if (value == null)
+                return null;
+            
+            // Handle JArray
+            if (value is JArray jArray)
+            {
+                var array = Array.CreateInstance(elementType, jArray.Count);
+                for (int i = 0; i < jArray.Count; i++)
+                {
+                    var convertedElement = ConvertValue(jArray[i].ToObject<object>(), elementType, inPrefabMode);
+                    array.SetValue(convertedElement, i);
+                }
+                return array;
+            }
+            
+            // Handle List<object>
+            if (value is List<object> objectList)
+            {
+                var array = Array.CreateInstance(elementType, objectList.Count);
+                for (int i = 0; i < objectList.Count; i++)
+                {
+                    var convertedElement = ConvertValue(objectList[i], elementType, inPrefabMode);
+                    array.SetValue(convertedElement, i);
+                }
+                return array;
+            }
+            
+            // Handle object[]
+            if (value is object[] objectArray)
+            {
+                var array = Array.CreateInstance(elementType, objectArray.Length);
+                for (int i = 0; i < objectArray.Length; i++)
+                {
+                    var convertedElement = ConvertValue(objectArray[i], elementType, inPrefabMode);
+                    array.SetValue(convertedElement, i);
+                }
+                return array;
+            }
+            
+            // Handle already typed arrays
+            if (value.GetType().IsArray)
+            {
+                var sourceArray = (Array)value;
+                var array = Array.CreateInstance(elementType, sourceArray.Length);
+                for (int i = 0; i < sourceArray.Length; i++)
+                {
+                    var convertedElement = ConvertValue(sourceArray.GetValue(i), elementType, inPrefabMode);
+                    array.SetValue(convertedElement, i);
+                }
+                return array;
+            }
+            
+            // Handle comma-separated string for simple types
+            if (value is string stringValue && (elementType.IsPrimitive || elementType == typeof(string)))
+            {
+                var parts = stringValue.Split(',').Select(s => s.Trim()).ToArray();
+                var array = Array.CreateInstance(elementType, parts.Length);
+                for (int i = 0; i < parts.Length; i++)
+                {
+                    var convertedElement = ConvertValue(parts[i], elementType, inPrefabMode);
+                    array.SetValue(convertedElement, i);
+                }
+                return array;
+            }
+            
+            // If single value, create array with one element
+            var singleArray = Array.CreateInstance(elementType, 1);
+            singleArray.SetValue(ConvertValue(value, elementType, inPrefabMode), 0);
+            return singleArray;
+        }
+        
+        /// <summary>
+        /// Converts a value to a List<T> of the specified element type
+        /// </summary>
+        private static object ConvertToList(object value, Type elementType, bool inPrefabMode)
+        {
+            var listType = typeof(List<>).MakeGenericType(elementType);
+            var list = Activator.CreateInstance(listType);
+            var addMethod = listType.GetMethod("Add");
+            
+            if (value == null)
+                return list;
+            
+            // Handle JArray
+            if (value is JArray jArray)
+            {
+                foreach (var item in jArray)
+                {
+                    var convertedElement = ConvertValue(item.ToObject<object>(), elementType, inPrefabMode);
+                    addMethod.Invoke(list, new[] { convertedElement });
+                }
+                return list;
+            }
+            
+            // Handle List<object>
+            if (value is List<object> objectList)
+            {
+                foreach (var item in objectList)
+                {
+                    var convertedElement = ConvertValue(item, elementType, inPrefabMode);
+                    addMethod.Invoke(list, new[] { convertedElement });
+                }
+                return list;
+            }
+            
+            // Handle arrays
+            if (value.GetType().IsArray)
+            {
+                var array = (Array)value;
+                foreach (var item in array)
+                {
+                    var convertedElement = ConvertValue(item, elementType, inPrefabMode);
+                    addMethod.Invoke(list, new[] { convertedElement });
+                }
+                return list;
+            }
+            
+            // Handle comma-separated string for simple types
+            if (value is string stringValue && (elementType.IsPrimitive || elementType == typeof(string)))
+            {
+                var parts = stringValue.Split(',').Select(s => s.Trim()).ToArray();
+                foreach (var part in parts)
+                {
+                    var convertedElement = ConvertValue(part, elementType, inPrefabMode);
+                    addMethod.Invoke(list, new[] { convertedElement });
+                }
+                return list;
+            }
+            
+            // If single value, create list with one element
+            var singleConverted = ConvertValue(value, elementType, inPrefabMode);
+            addMethod.Invoke(list, new[] { singleConverted });
+            return list;
         }
     }
 }
