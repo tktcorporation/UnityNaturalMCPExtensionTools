@@ -384,6 +384,76 @@ namespace UnityNaturalMCPExtension.Editor
             }, "ConfigureComponent", inPrefabMode);
         }
 
+        [McpServerTool, Description("Remove components from GameObjects")]
+        public async ValueTask<string> RemoveComponent(
+            [Description("Name of the GameObject")]
+            string objectName,
+            [Description("Component type name to remove (e.g., 'BoxCollider', 'Rigidbody')")]
+            string componentType,
+            [Description("Remove from Prefab mode context instead of scene (optional, default: false)")]
+            bool inPrefabMode = false)
+        {
+            return await ExecuteOperation(async () =>
+            {
+                var gameObject = await FindGameObjectSafe(objectName, inPrefabMode);
+                if (gameObject == null)
+                    return McpToolUtilities.CreateErrorMessage("RemoveComponent", $"GameObject not found{(inPrefabMode ? " in Prefab mode" : " in scene")}", objectName);
+
+                if (string.IsNullOrEmpty(componentType))
+                    return McpToolUtilities.CreateErrorMessage("RemoveComponent", "componentType is required", objectName);
+
+                // Resolve component type using ComponentPropertyManager
+                var compType = ComponentPropertyManager.ResolveComponentType(componentType);
+
+                if (compType == null)
+                {
+                    // Try to suggest similar component names
+                    var suggestions = ComponentPropertyManager.GetComponentSuggestions(componentType);
+                    var suggestionText = suggestions.Any() ? $" Did you mean: {string.Join(", ", suggestions)}?" : "";
+                    return McpToolUtilities.CreateErrorMessage("RemoveComponent",
+                        $"Component type '{componentType}' not found.{suggestionText}", objectName);
+                }
+
+                // Check if component exists on the GameObject
+                var component = gameObject.GetComponent(compType);
+                if (component == null)
+                {
+                    return McpToolUtilities.CreateErrorMessage("RemoveComponent",
+                        $"Component '{componentType}' not found on GameObject", objectName);
+                }
+
+                // Prevent removal of essential components
+                if (compType == typeof(Transform))
+                {
+                    return McpToolUtilities.CreateErrorMessage("RemoveComponent",
+                        "Cannot remove Transform component - it is required for all GameObjects", objectName);
+                }
+
+                // Check for other essential components that shouldn't be removed
+                if (typeof(Transform).IsAssignableFrom(compType))
+                {
+                    return McpToolUtilities.CreateErrorMessage("RemoveComponent",
+                        $"Cannot remove {componentType} - Transform-derived components are essential", objectName);
+                }
+
+                try
+                {
+                    // Record the operation for Undo
+                    Undo.DestroyObjectImmediate(component);
+                    EditorUtility.SetDirty(gameObject);
+
+                    return McpToolUtilities.CreateSuccessMessage("Removed component", objectName, 
+                        $"Successfully removed {componentType} component");
+                }
+                catch (Exception e)
+                {
+                    return McpToolUtilities.CreateErrorMessage("RemoveComponent",
+                        $"Failed to remove component '{componentType}': {e.Message}", objectName);
+                }
+
+            }, "RemoveComponent", inPrefabMode);
+        }
+
         [McpServerTool, Description("Get information about a specific GameObject")]
         public async ValueTask<string> GetObjectInfo(
             [Description("Name of the GameObject to inspect")]
