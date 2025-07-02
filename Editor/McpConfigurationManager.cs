@@ -97,6 +97,7 @@ namespace UnityNaturalMCPExtension.Editor
             }
         }
 
+
         public static Type ResolveConfigurationType(string typeName)
         {
             if (ConfigurationTypeCache.TryGetValue(typeName, out var cachedType))
