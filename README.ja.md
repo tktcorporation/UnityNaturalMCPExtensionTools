@@ -5,9 +5,7 @@
 [Unity Natural MCP](https://github.com/notargs/UnityNaturalMCP)サーバーの機能を拡張し、包括的なUnity Editor自動化を実現するカスタムMCP（Model Context Protocol）ツール群です。
 
 > [!WARNING]
-> これは自分のために制作中のもので、動作は保証できません
-
-**このリポジトリの大部分はClaudeCodeによって作成されています**
+> **このリポジトリの大部分はClaudeCodeによって作成されています。動作を保証するものではありません。**
 
 ## ベースプロジェクト
 
