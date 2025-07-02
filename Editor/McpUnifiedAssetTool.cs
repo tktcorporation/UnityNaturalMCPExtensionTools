@@ -15,7 +15,7 @@ namespace UnityNaturalMCPExtension.Editor
     /// Unified MCP tool for material, asset, and folder management in Unity
     /// </summary>
     [McpServerToolType, Description("Unified material and asset management tools for Unity")]
-    internal sealed class McpUnifiedAssetTool
+    internal sealed class McpUnifiedAssetTool : McpToolBase
     {
         [McpServerTool, Description("Create or update materials with multiple properties in one call")]
         public async ValueTask<string> ManageMaterial(
@@ -40,9 +40,8 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Additional color properties as key-value pairs (optional)")]
             Dictionary<string, float[]> additionalColorProperties = null)
         {
-            try
+            return await ExecuteWithErrorHandling(async () =>
             {
-                await UniTask.SwitchToMainThread();
 
                 Material material = null;
                 var changes = new List<string>();
@@ -55,7 +54,7 @@ namespace UnityNaturalMCPExtension.Editor
 
                         var shader = Shader.Find(shaderName);
                         if (shader == null)
-                            return $"Error: Shader '{shaderName}' not found";
+                            return McpToolUtilities.CreateErrorMessage("ManageMaterial", $"Shader '{shaderName}' not found");
 
                         material = new Material(shader);
                         material.name = materialName;
@@ -72,7 +71,7 @@ namespace UnityNaturalMCPExtension.Editor
                     case "update":
                         material = FindMaterial(materialName);
                         if (material == null)
-                            return $"Error: Material '{materialName}' not found";
+                            return McpToolUtilities.CreateErrorMessage("ManageMaterial", $"Material '{materialName}' not found");
 
                         if (!string.IsNullOrEmpty(shaderName))
                         {
@@ -86,7 +85,7 @@ namespace UnityNaturalMCPExtension.Editor
                         break;
 
                     default:
-                        return "Error: operation must be 'create' or 'update'";
+                        return McpToolUtilities.CreateErrorMessage("ManageMaterial", "operation must be 'create' or 'update'");
                 }
 
                 // Apply properties
@@ -167,14 +166,9 @@ namespace UnityNaturalMCPExtension.Editor
                 AssetDatabase.SaveAssets();
 
                 return changes.Count > 0
-                    ? $"Successfully {operation}d material '{materialName}': {string.Join(", ", changes)}"
-                    : $"Material '{materialName}' {operation}d with no property changes";
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error managing material: {e}");
-                return $"Error managing material: {e.Message}";
-            }
+                    ? McpToolUtilities.CreateSuccessMessage($"{operation}d material", materialName, string.Join(", ", changes))
+                    : McpToolUtilities.CreateSuccessMessage($"Material {operation}d", materialName, "no property changes");
+            }, "ManageMaterial");
         }
 
         [McpServerTool, Description("Assign material to a GameObject's renderer")]
@@ -186,38 +180,32 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Material slot index (default: 0)")]
             int materialIndex = 0)
         {
-            try
+            return await ExecuteWithErrorHandling(async () =>
             {
-                await UniTask.SwitchToMainThread();
-
-                var gameObject = McpToolUtilities.FindGameObjectInScene(objectName);
+                var gameObject = await FindGameObjectSafe(objectName, false);
                 if (gameObject == null)
-                    return $"Error: GameObject '{objectName}' not found";
+                    return McpToolUtilities.CreateErrorMessage("AssignMaterialToRenderer", "GameObject not found", objectName);
 
                 var renderer = gameObject.GetComponent<Renderer>();
                 if (renderer == null)
-                    return $"Error: GameObject '{objectName}' does not have a Renderer component";
+                    return McpToolUtilities.CreateErrorMessage("AssignMaterialToRenderer", "GameObject does not have a Renderer component", objectName);
 
                 var material = FindMaterial(materialName);
                 if (material == null)
-                    return $"Error: Material '{materialName}' not found";
+                    return McpToolUtilities.CreateErrorMessage("AssignMaterialToRenderer", "Material not found", materialName);
 
                 if (materialIndex < 0 || materialIndex >= renderer.sharedMaterials.Length)
-                    return $"Error: Material index {materialIndex} is out of range. GameObject has {renderer.sharedMaterials.Length} material slots";
+                    return McpToolUtilities.CreateErrorMessage("AssignMaterialToRenderer", $"Material index {materialIndex} is out of range. GameObject has {renderer.sharedMaterials.Length} material slots");
 
                 var materials = renderer.sharedMaterials;
                 materials[materialIndex] = material;
                 renderer.sharedMaterials = materials;
 
                 EditorUtility.SetDirty(renderer);
+                MarkSceneDirty(false);
 
-                return $"Successfully assigned material '{materialName}' to GameObject '{objectName}' at slot {materialIndex}";
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error assigning material: {e}");
-                return $"Error assigning material: {e.Message}";
-            }
+                return McpToolUtilities.CreateSuccessMessage("Assigned material", materialName, $"to GameObject '{objectName}' at slot {materialIndex}");
+            }, "AssignMaterialToRenderer");
         }
 
         [McpServerTool, Description("List all materials in the project")]
@@ -225,9 +213,8 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Optional name filter")]
             string nameFilter = null)
         {
-            try
+            return await ExecuteWithErrorHandling(async () =>
             {
-                await UniTask.SwitchToMainThread();
 
                 var materialGuids = AssetDatabase.FindAssets("t:Material");
                 var materials = new List<string>();
@@ -258,12 +245,7 @@ namespace UnityNaturalMCPExtension.Editor
                 result += ":\n" + string.Join("\n", materials);
 
                 return result;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error listing materials: {e}");
-                return $"Error listing materials: {e.Message}";
-            }
+            }, "ListMaterials");
         }
 
         [McpServerTool, Description("Manage assets and folders (create folder, create prefab, delete asset)")]
@@ -277,18 +259,17 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("For createPrefab: GameObject name in scene (optional)")]
             string objectName = null)
         {
-            try
+            return await ExecuteWithErrorHandling(async () =>
             {
-                await UniTask.SwitchToMainThread();
 
                 switch (operation?.ToLower())
                 {
                     case "createfolder":
                         if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(folderName))
-                            return "Error: Both path and folderName are required for createFolder";
+                            return McpToolUtilities.CreateErrorMessage("ManageAsset", "Both path and folderName are required for createFolder");
 
                         if (!AssetDatabase.IsValidFolder(path))
-                            return $"Error: Parent path '{path}' does not exist";
+                            return McpToolUtilities.CreateErrorMessage("ManageAsset", "Parent path does not exist", path);
 
                         var fullPath = Path.Combine(path, folderName).Replace('\\', '/');
 
@@ -300,16 +281,16 @@ namespace UnityNaturalMCPExtension.Editor
                         AssetDatabase.Refresh();
 
                         return string.IsNullOrEmpty(guid)
-                            ? $"Error: Failed to create folder '{fullPath}'"
-                            : $"Successfully created folder '{fullPath}'";
+                            ? McpToolUtilities.CreateErrorMessage("ManageAsset", "Failed to create folder", fullPath)
+                            : McpToolUtilities.CreateSuccessMessage("Created folder", fullPath);
 
                     case "createprefab":
                         if (string.IsNullOrEmpty(objectName) || string.IsNullOrEmpty(path))
-                            return "Error: Both objectName and path are required for createPrefab";
+                            return McpToolUtilities.CreateErrorMessage("ManageAsset", "Both objectName and path are required for createPrefab");
 
-                        var gameObject = McpToolUtilities.FindGameObjectInScene(objectName);
+                        var gameObject = await FindGameObjectSafe(objectName, false);
                         if (gameObject == null)
-                            return $"Error: GameObject '{objectName}' not found in scene";
+                            return McpToolUtilities.CreateErrorMessage("ManageAsset", "GameObject not found in scene", objectName);
 
                         if (!path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
                             path += ".prefab";
@@ -324,19 +305,19 @@ namespace UnityNaturalMCPExtension.Editor
                         var prefab = PrefabUtility.SaveAsPrefabAsset(gameObject, path);
 
                         if (prefab == null)
-                            return $"Error: Failed to create prefab at '{path}'";
+                            return McpToolUtilities.CreateErrorMessage("ManageAsset", "Failed to create prefab", path);
 
                         AssetDatabase.SaveAssets();
                         AssetDatabase.Refresh();
 
-                        return $"Successfully created prefab '{prefab.name}' at '{path}' from GameObject '{objectName}'";
+                        return McpToolUtilities.CreateSuccessMessage("Created prefab", prefab.name, $"at '{path}' from GameObject '{objectName}'");
 
                     case "delete":
                         if (string.IsNullOrEmpty(path))
-                            return "Error: Path is required for delete operation";
+                            return McpToolUtilities.CreateErrorMessage("ManageAsset", "Path is required for delete operation");
 
                         if (!File.Exists(path) && !Directory.Exists(path))
-                            return $"Error: Asset at path '{path}' does not exist";
+                            return McpToolUtilities.CreateErrorMessage("ManageAsset", "Asset does not exist", path);
 
                         var assetName = Path.GetFileName(path);
 
@@ -344,22 +325,17 @@ namespace UnityNaturalMCPExtension.Editor
                         {
                             AssetDatabase.SaveAssets();
                             AssetDatabase.Refresh();
-                            return $"Successfully deleted asset '{assetName}' at '{path}'";
+                            return McpToolUtilities.CreateSuccessMessage("Deleted asset", assetName, $"at '{path}'");
                         }
                         else
                         {
-                            return $"Error: Failed to delete asset at '{path}'";
+                            return McpToolUtilities.CreateErrorMessage("ManageAsset", "Failed to delete asset", path);
                         }
 
                     default:
-                        return "Error: operation must be 'createFolder', 'createPrefab', or 'delete'";
+                        return McpToolUtilities.CreateErrorMessage("ManageAsset", "operation must be 'createFolder', 'createPrefab', or 'delete'");
                 }
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error managing asset: {e}");
-                return $"Error managing asset: {e.Message}";
-            }
+            }, "ManageAsset");
         }
 
         [McpServerTool, Description("List all prefabs in the project")]
@@ -367,9 +343,8 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Optional name filter")]
             string nameFilter = null)
         {
-            try
+            return await ExecuteWithErrorHandling(async () =>
             {
-                await UniTask.SwitchToMainThread();
 
                 var prefabGuids = AssetDatabase.FindAssets("t:Prefab");
                 var prefabs = new List<string>();
@@ -401,12 +376,7 @@ namespace UnityNaturalMCPExtension.Editor
                 result += ":\n" + string.Join("\n", prefabs);
 
                 return result;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error listing prefabs: {e}");
-                return $"Error listing prefabs: {e.Message}";
-            }
+            }, "ListPrefabs");
         }
 
         private Material FindMaterial(string materialName)
@@ -449,19 +419,18 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Path to the prefab asset (e.g., Assets/Prefabs/MyPrefab.prefab)")]
             string prefabPath)
         {
-            try
+            return await ExecuteWithErrorHandling(async () =>
             {
-                await UniTask.SwitchToMainThread();
 
                 if (string.IsNullOrEmpty(prefabPath))
                     return "Error: prefabPath is required";
 
                 if (!File.Exists(prefabPath))
-                    return $"Error: Prefab file '{prefabPath}' does not exist";
+                    return McpToolUtilities.CreateErrorMessage("GetPrefabAssetInfo", "Prefab file does not exist", prefabPath);
 
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
                 if (prefab == null)
-                    return $"Error: Could not load prefab at '{prefabPath}'";
+                    return McpToolUtilities.CreateErrorMessage("GetPrefabAssetInfo", "Could not load prefab", prefabPath);
 
                 var assetType = PrefabUtility.GetPrefabAssetType(prefab);
                 var isVariant = assetType == PrefabAssetType.Variant;
@@ -526,12 +495,7 @@ namespace UnityNaturalMCPExtension.Editor
                 }
 
                 return string.Join("\n", info);
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error getting prefab asset info: {e}");
-                return $"Error getting prefab asset info: {e.Message}";
-            }
+            }, "GetPrefabAssetInfo");
         }
 
     }

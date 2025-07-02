@@ -20,7 +20,7 @@ namespace UnityNaturalMCPExtension.Editor
     /// Unified MCP tool for comprehensive object creation and manipulation in Unity
     /// </summary>
     [McpServerToolType, Description("Unified object creation and manipulation tools for Unity")]
-    internal sealed class McpUnifiedObjectTool
+    internal sealed class McpUnifiedObjectTool : McpToolBase
     {
         private static readonly ConcurrentDictionary<string, Type> _typeCache = new ConcurrentDictionary<string, Type>();
         [McpServerTool, Description("Create objects in the scene (Primitive, Empty GameObject, or Prefab instance)")]
@@ -44,17 +44,8 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Create in Prefab mode context instead of scene (optional, default: false)")]
             bool inPrefabMode = false)
         {
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
-
-                // Check if we're in Prefab mode when requested
-                if (inPrefabMode)
-                {
-                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
-                    if (prefabStage == null)
-                        return "Error: Prefab mode is not active. Please open a prefab first.";
-                }
 
                 GameObject gameObject = null;
 
@@ -62,10 +53,10 @@ namespace UnityNaturalMCPExtension.Editor
                 {
                     case "primitive":
                         if (string.IsNullOrEmpty(primitiveType))
-                            return "Error: primitiveType is required when creating a primitive";
+                            return McpToolUtilities.CreateErrorMessage("CreateObject", "primitiveType is required when creating a primitive");
 
                         if (!Enum.TryParse<PrimitiveType>(primitiveType, true, out var primType))
-                            return $"Error: Invalid primitive type '{primitiveType}'. Valid types: Cube, Sphere, Cylinder, Capsule, Plane, Quad";
+                            return McpToolUtilities.CreateErrorMessage("CreateObject", $"Invalid primitive type '{primitiveType}'. Valid types: Cube, Sphere, Cylinder, Capsule, Plane, Quad");
 
                         gameObject = GameObject.CreatePrimitive(primType);
                         break;
@@ -76,21 +67,21 @@ namespace UnityNaturalMCPExtension.Editor
 
                     case "prefab":
                         if (string.IsNullOrEmpty(prefabName))
-                            return "Error: prefabName is required when creating from prefab";
+                            return McpToolUtilities.CreateErrorMessage("CreateObject", "prefabName is required when creating from prefab");
 
                         var prefabAsset = FindPrefab(prefabName);
                         if (prefabAsset == null)
-                            return $"Error: Prefab '{prefabName}' not found";
+                            return McpToolUtilities.CreateErrorMessage("CreateObject", $"Prefab '{prefabName}' not found");
 
                         gameObject = PrefabUtility.InstantiatePrefab(prefabAsset) as GameObject;
                         break;
 
                     default:
-                        return "Error: type must be 'primitive', 'empty', or 'prefab'";
+                        return McpToolUtilities.CreateErrorMessage("CreateObject", "type must be 'primitive', 'empty', or 'prefab'");
                 }
 
                 if (gameObject == null)
-                    return "Error: Failed to create object";
+                    return McpToolUtilities.CreateErrorMessage("CreateObject", "Failed to create object");
 
                 // Set name
                 if (!string.IsNullOrEmpty(objectName))
@@ -109,23 +100,11 @@ namespace UnityNaturalMCPExtension.Editor
                 // Set parent
                 if (!string.IsNullOrEmpty(parentName))
                 {
-                    var parent = McpToolUtilities.FindGameObject(parentName, inPrefabMode);
+                    var parent = await FindGameObjectSafe(parentName, inPrefabMode);
                     if (parent != null)
                         gameObject.transform.SetParent(parent.transform);
                 }
 
-                if (inPrefabMode)
-                {
-                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
-                    if (prefabStage != null)
-                    {
-                        EditorSceneManager.MarkSceneDirty(prefabStage.scene);
-                    }
-                }
-                else
-                {
-                    EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
-                }
                 Undo.RegisterCreatedObjectUndo(gameObject, $"Create {type}");
 
                 var pos = gameObject.transform.position;
@@ -133,14 +112,9 @@ namespace UnityNaturalMCPExtension.Editor
                 var scl = gameObject.transform.localScale;
                 var parentInfo = gameObject.transform.parent != null ? $" (child of {gameObject.transform.parent.name})" : "";
 
-                return $"Successfully created {type} '{gameObject.name}' at position ({pos.x:F2}, {pos.y:F2}, {pos.z:F2}), " +
-                       $"rotation ({rot.x:F2}, {rot.y:F2}, {rot.z:F2}), scale ({scl.x:F2}, {scl.y:F2}, {scl.z:F2}){parentInfo}";
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error creating object: {e}");
-                return $"Error creating object: {e.Message}";
-            }
+                return McpToolUtilities.CreateSuccessMessage($"Created {type}", gameObject.name, 
+                    $"at position ({pos.x:F2}, {pos.y:F2}, {pos.z:F2}), rotation ({rot.x:F2}, {rot.y:F2}, {rot.z:F2}), scale ({scl.x:F2}, {scl.y:F2}, {scl.z:F2}){parentInfo}");
+            }, "CreateObject", inPrefabMode);
         }
 
         [McpServerTool, Description("Manipulate existing objects (transform, parent, duplicate, rename, delete, setactive, or setlayer)")]
@@ -172,21 +146,11 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Operate in Prefab mode context instead of scene (optional, default: false)")]
             bool inPrefabMode = false)
         {
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
-
-                // Check if we're in Prefab mode when requested
-                if (inPrefabMode)
-                {
-                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
-                    if (prefabStage == null)
-                        return "Error: Prefab mode is not active. Please open a prefab first.";
-                }
-
-                var gameObject = McpToolUtilities.FindGameObject(objectName, inPrefabMode);
+                var gameObject = await FindGameObjectSafe(objectName, inPrefabMode);
                 if (gameObject == null)
-                    return $"Error: GameObject '{objectName}' not found{(inPrefabMode ? " in Prefab mode" : " in scene")}";
+                    return McpToolUtilities.CreateErrorMessage("ManipulateObject", $"GameObject not found{(inPrefabMode ? " in Prefab mode" : " in scene")}", objectName);
 
                 switch (operation?.ToLower())
                 {
@@ -213,16 +177,16 @@ namespace UnityNaturalMCPExtension.Editor
 
                         EditorUtility.SetDirty(gameObject);
                         return changes.Count > 0
-                            ? $"Successfully updated transform on '{objectName}': {string.Join(", ", changes)}"
-                            : $"No transform changes applied to '{objectName}'";
+                            ? McpToolUtilities.CreateSuccessMessage("Updated transform", objectName, string.Join(", ", changes))
+                            : McpToolUtilities.CreateSuccessMessage("No transform changes applied", objectName);
 
                     case "parent":
                         Transform newParent = null;
                         if (!string.IsNullOrEmpty(parentName))
                         {
-                            var parentObj = McpToolUtilities.FindGameObject(parentName, inPrefabMode);
+                            var parentObj = await FindGameObjectSafe(parentName, inPrefabMode);
                             if (parentObj == null)
-                                return $"Error: Parent GameObject '{parentName}' not found{(inPrefabMode ? " in Prefab mode" : " in scene")}";
+                                return McpToolUtilities.CreateErrorMessage("ManipulateObject", $"Parent GameObject not found{(inPrefabMode ? " in Prefab mode" : " in scene")}", parentName);
                             newParent = parentObj.transform;
                         }
 
@@ -232,7 +196,7 @@ namespace UnityNaturalMCPExtension.Editor
 
                         var parentInfo = newParent != null ? $"'{newParent.name}'" : "root";
                         var oldParentInfo = oldParent != null ? $"'{oldParent.name}'" : "root";
-                        return $"Successfully moved '{objectName}' from {oldParentInfo} to {parentInfo}";
+                        return McpToolUtilities.CreateSuccessMessage("Moved object", objectName, $"from {oldParentInfo} to {parentInfo}");
 
                     case "duplicate":
                         var duplicated = GameObject.Instantiate(gameObject);
@@ -251,75 +215,37 @@ namespace UnityNaturalMCPExtension.Editor
                         Undo.RegisterCreatedObjectUndo(duplicated, $"Duplicate {objectName}");
                         EditorUtility.SetDirty(duplicated);
 
-                        return $"Successfully duplicated '{objectName}' as '{duplicated.name}'";
+                        return McpToolUtilities.CreateSuccessMessage("Duplicated object", objectName, $"as '{duplicated.name}'");
 
                     case "rename":
                         if (string.IsNullOrEmpty(newName))
-                            return "Error: newName is required for rename operation";
+                            return McpToolUtilities.CreateErrorMessage("ManipulateObject", "newName is required for rename operation");
                         
                         var oldName = gameObject.name;
                         Undo.RecordObject(gameObject, $"Rename {oldName}");
                         gameObject.name = newName;
                         EditorUtility.SetDirty(gameObject);
                         
-                        if (inPrefabMode)
-                        {
-                            var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
-                            if (prefabStage != null)
-                            {
-                                EditorSceneManager.MarkSceneDirty(prefabStage.scene);
-                            }
-                        }
-                        else
-                        {
-                            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
-                        }
-                        
-                        return $"Successfully renamed GameObject from '{oldName}' to '{newName}'";
+                        return McpToolUtilities.CreateSuccessMessage("Renamed GameObject", oldName, $"to '{newName}'");
 
                     case "delete":
                         Undo.DestroyObjectImmediate(gameObject);
-                        if (inPrefabMode)
-                        {
-                            var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
-                            if (prefabStage != null)
-                            {
-                                EditorSceneManager.MarkSceneDirty(prefabStage.scene);
-                            }
-                        }
-                        else
-                        {
-                            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
-                        }
-                        return $"Successfully deleted GameObject '{objectName}'";
+                        return McpToolUtilities.CreateSuccessMessage("Deleted GameObject", objectName);
 
                     case "setactive":
                         if (!isActive.HasValue)
-                            return "Error: isActive is required for setactive operation";
+                            return McpToolUtilities.CreateErrorMessage("ManipulateObject", "isActive is required for setactive operation");
                         
                         var oldActiveState = gameObject.activeSelf;
                         Undo.RecordObject(gameObject, $"Set Active {objectName}");
                         gameObject.SetActive(isActive.Value);
                         EditorUtility.SetDirty(gameObject);
                         
-                        if (inPrefabMode)
-                        {
-                            var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
-                            if (prefabStage != null)
-                            {
-                                EditorSceneManager.MarkSceneDirty(prefabStage.scene);
-                            }
-                        }
-                        else
-                        {
-                            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
-                        }
-                        
-                        return $"Successfully changed GameObject '{objectName}' active state from {oldActiveState} to {isActive.Value}";
+                        return McpToolUtilities.CreateSuccessMessage("Changed active state", objectName, $"from {oldActiveState} to {isActive.Value}");
 
                     case "setlayer":
                         if (layerName == null && layerIndex == null)
-                            return "Error: Either layerName or layerIndex is required for setlayer operation";
+                            return McpToolUtilities.CreateErrorMessage("ManipulateObject", "Either layerName or layerIndex is required for setlayer operation");
                         
                         int targetLayerIndex = -1;
                         
@@ -327,12 +253,12 @@ namespace UnityNaturalMCPExtension.Editor
                         {
                             targetLayerIndex = LayerMask.NameToLayer(layerName);
                             if (targetLayerIndex == -1)
-                                return $"Error: Layer '{layerName}' not found";
+                                return McpToolUtilities.CreateErrorMessage("ManipulateObject", $"Layer '{layerName}' not found");
                         }
                         else if (layerIndex.HasValue)
                         {
                             if (!IsValidLayerIndex(layerIndex.Value))
-                                return $"Error: Layer index {layerIndex.Value} is invalid. Must be between 0 and 31";
+                                return McpToolUtilities.CreateErrorMessage("ManipulateObject", $"Layer index {layerIndex.Value} is invalid. Must be between 0 and 31");
                             targetLayerIndex = layerIndex.Value;
                         }
                         
@@ -344,30 +270,12 @@ namespace UnityNaturalMCPExtension.Editor
                         gameObject.layer = targetLayerIndex;
                         EditorUtility.SetDirty(gameObject);
                         
-                        if (inPrefabMode)
-                        {
-                            var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
-                            if (prefabStage != null)
-                            {
-                                EditorSceneManager.MarkSceneDirty(prefabStage.scene);
-                            }
-                        }
-                        else
-                        {
-                            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
-                        }
-                        
-                        return $"Successfully changed GameObject '{objectName}' layer from {oldLayer} ({oldLayerName}) to {targetLayerIndex} ({newLayerName})";
+                        return McpToolUtilities.CreateSuccessMessage("Changed layer", objectName, $"from {oldLayer} ({oldLayerName}) to {targetLayerIndex} ({newLayerName})");
 
                     default:
-                        return "Error: operation must be 'transform', 'parent', 'duplicate', 'rename', 'delete', 'setactive', or 'setlayer'";
+                        return McpToolUtilities.CreateErrorMessage("ManipulateObject", "Invalid operation. Must be 'transform', 'parent', 'duplicate', 'rename', 'delete', 'setactive', or 'setlayer'");
                 }
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error manipulating object: {e}");
-                return $"Error manipulating object: {e.Message}";
-            }
+            }, "ManipulateObject", inPrefabMode);
         }
 
         [McpServerTool, Description("Add or configure components on GameObjects")]
@@ -381,21 +289,11 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Configure in Prefab mode context instead of scene (optional, default: false)")]
             bool inPrefabMode = false)
         {
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
-
-                // Check if we're in Prefab mode when requested
-                if (inPrefabMode)
-                {
-                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
-                    if (prefabStage == null)
-                        return "Error: Prefab mode is not active. Please open a prefab first.";
-                }
-
-                var gameObject = McpToolUtilities.FindGameObject(objectName, inPrefabMode);
+                var gameObject = await FindGameObjectSafe(objectName, inPrefabMode);
                 if (gameObject == null)
-                    return $"Error: GameObject '{objectName}' not found{(inPrefabMode ? " in Prefab mode" : " in scene")}";
+                    return McpToolUtilities.CreateErrorMessage("ConfigureComponent", $"GameObject not found{(inPrefabMode ? " in Prefab mode" : " in scene")}", objectName);
 
                 UnityEngine.Component component = null;
 
@@ -484,14 +382,9 @@ namespace UnityNaturalMCPExtension.Editor
                 {
                     EditorUtility.SetDirty(gameObject);
                     var actionText = wasAdded ? "added" : "found existing";
-                    return $"Successfully {actionText} {compType.Name} on '{objectName}'";
+                    return McpToolUtilities.CreateSuccessMessage($"{actionText} {compType.Name}", objectName);
                 }
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error configuring component: {e}");
-                return $"Error configuring component: {e.Message}";
-            }
+            }, "ConfigureComponent", inPrefabMode);
         }
 
         [McpServerTool, Description("Get information about a specific GameObject")]
@@ -503,21 +396,11 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Include SerializeField null checks in component details (optional, default: false)")]
             bool checkSerializeFields = false)
         {
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
-
-                // Check if we're in Prefab mode when requested
-                if (inPrefabMode)
-                {
-                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
-                    if (prefabStage == null)
-                        return "Error: Prefab mode is not active. Please open a prefab first.";
-                }
-
-                var gameObject = McpToolUtilities.FindGameObject(objectName, inPrefabMode);
+                var gameObject = await FindGameObjectSafe(objectName, inPrefabMode);
                 if (gameObject == null)
-                    return $"Error: GameObject '{objectName}' not found{(inPrefabMode ? " in Prefab mode" : " in scene")}";
+                    return McpToolUtilities.CreateErrorMessage("GetObjectInfo", $"GameObject not found{(inPrefabMode ? " in Prefab mode" : " in scene")}", objectName);
 
                 var info = new System.Text.StringBuilder();
                 info.AppendLine($"GameObject: {gameObject.name}");
@@ -552,12 +435,7 @@ namespace UnityNaturalMCPExtension.Editor
                 }
 
                 return info.ToString();
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error getting object info: {e}");
-                return $"Error getting object info: {e.Message}";
-            }
+            }, "GetObjectInfo", inPrefabMode);
         }
 
         [McpServerTool, Description("List all GameObjects in the active scene or Prefab mode")]
@@ -567,17 +445,15 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("List objects in Prefab mode context instead of scene (optional, default: false)")]
             bool inPrefabMode = false)
         {
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
-
                 var sceneObjects = new List<string>();
 
                 if (inPrefabMode)
                 {
-                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+                    var prefabStage = GetCurrentPrefabStage();
                     if (prefabStage == null)
-                        return "Error: Prefab mode is not active. Please open a prefab first.";
+                        return McpToolUtilities.CreateErrorMessage("ListSceneObjects", "Prefab mode is not active. Please open a prefab first.");
 
                     var root = prefabStage.prefabContentsRoot;
 
@@ -609,16 +485,10 @@ namespace UnityNaturalMCPExtension.Editor
                 }
                 else
                 {
-                    var allObjects = Resources.FindObjectsOfTypeAll<GameObject>();
+                    var allObjects = McpToolUtilities.GetAllGameObjects(inPrefabMode, true);
 
                     foreach (var obj in allObjects)
                     {
-                        if (obj.scene != EditorSceneManager.GetActiveScene())
-                            continue;
-
-                        if (EditorUtility.IsPersistent(obj))
-                            continue;
-
                         if (!string.IsNullOrEmpty(nameFilter) &&
                             !obj.name.ToLowerInvariant().Contains(nameFilter.ToLowerInvariant()))
                             continue;
@@ -642,12 +512,7 @@ namespace UnityNaturalMCPExtension.Editor
                 result += ":\n" + string.Join("\n", sceneObjects);
 
                 return result;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error listing scene objects: {e}");
-                return $"Error listing scene objects: {e.Message}";
-            }
+            }, "ListSceneObjects", false); // Don't validate prefab mode since we handle it inside
         }
 
         private GameObject FindPrefab(string prefabName)
