@@ -1,62 +1,75 @@
 # Unity Natural MCP Extension Tools
 
+[日本語](README.ja.md)
+
 Custom MCP (Model Context Protocol) tools that extend [Unity Natural MCP](https://github.com/notargs/UnityNaturalMCP) server capabilities for comprehensive Unity Editor automation.
 
-**THIS IS SOMETHING I AM CURRENTLY WORKING ON FOR MY OWN USE, SO I CANNOT GUARANTEE THAT IT WILL WORK.**
+> [!WARNING]
+> This is currently a work in progress for personal use, so functionality cannot be guaranteed.
 
-**これは自分のために制作中のもので、動作は保証できません**
-
-## Overview
-
-This package provides a collection of custom MCP tools designed to enhance the Unity Natural MCP server with additional Unity Editor operation capabilities. It extends the base functionality provided by Unity Natural MCP to enable more comprehensive automation workflows.
+**Most of this repository has been created by Claude Code**
 
 ## Base Project
 
 This is an extension of [Unity Natural MCP](https://github.com/notargs/UnityNaturalMCP) by notargs, which provides MCP server integration for Unity Editor.
 
+**Unity Natural MCP must be installed for this to function**
+
 ## Features
 
-### 🎯 Scene Object Management
-- Create empty GameObjects and primitives
-- Duplicate and delete objects
-- Set parent-child relationships
-- Transform property manipulation
+### 🎯 Unified Object Management (McpUnifiedObjectTool)
+- Create empty GameObjects, primitives, and prefab instances
+- Transform, duplicate, delete objects, and set parent-child relationships
+- Add and configure components (with JSON structured configuration support)
+- Get detailed GameObject information
+- List and filter scene objects
 
-### 🎨 Material Operations
-- Create materials with custom shaders
-- Set material properties (color, metallic, smoothness, emission)
+### 🎨 Unified Asset & Material Management (McpUnifiedAssetTool)
+- Create and update materials (with JSON structured configuration support)
 - Assign materials to renderers
 - List and filter materials
+- Create folders, create prefabs, delete assets
+- List prefabs and get detailed prefab information
 
-### 📷 Scene Capture
-- Capture Unity scene views to PNG images
-- Custom camera positioning and resolution settings
-- Automatic timestamp-based file naming
+### ✨ Unified Effect Systems (McpUnifiedEffectTool)
+- Comprehensive particle system configuration (with JSON structured configuration support)
+- Control particle system playback (play/stop)
+- Get detailed particle system information
+
+### 📷 Scene Capture Functionality (McpSceneCaptureTool)
+- Capture screenshots from scene view
+- Capture screenshots from game view
+- Capture prefabs in prefab edit mode
 - List and manage captured screenshots
 
-### 🔧 Component Properties
-- Configure renderer properties
-- Set up colliders (Box, Sphere, Capsule)
-- Configure audio sources
-- Add components dynamically
+### 📦 Prefab Edit Mode Management (McpPrefabEditTool)
+- Start, save, and exit prefab edit mode
+- Check prefab editing status
+- Apply prefab instance changes to source prefab
+- Revert prefab instance changes to source state
+- Display prefab instance change information and overrides
 
-### ✨ Particle Systems
-- Create particle systems
-- Configure main module properties
-- Set up emission and shape modules
-- Control playback
+### 🏗️ Scene Management Functionality (McpSceneManagementTool)
+- Create new scenes (supports Empty, 3D, 2D, UI templates)
+- Save scenes and save with new names
+- Load scenes (supports Single and Additive modes)
+- List scenes in project
+- Get active scene detailed information
+- Close scenes (multi-scene support)
 
-### 📦 Asset Management
-- Create folders
-- Convert GameObjects to prefabs
-- Instantiate prefabs
-- List and delete assets
+### ⚙️ Project Settings Management (McpProjectSettingsTool)
+- Manage project layers (list, set names, remove)
 
-### 🔧 Prefab Editing
-- Open prefabs in edit mode
-- Save prefab changes
-- Exit prefab edit mode
-- Check prefab edit status
+### 🔧 Common Infrastructure System
+- Unified error handling and logging
+- Automatic Prefab mode/Scene mode detection
+- Type-safe JSON configuration parsing and validation
+- Automatic conversion of Unity-specific types (Vector, Color, Quaternion, etc.)
+- Nested property setting (dot notation support)
+
+## Requirements
+
+Follows the requirements of [Unity Natural MCP](https://github.com/notargs/UnityNaturalMCP/tree/main?tab=readme-ov-file#requirements)
 
 ## Installation
 
@@ -69,48 +82,12 @@ This is an extension of [Unity Natural MCP](https://github.com/notargs/UnityNatu
 
 3. The tools will be automatically registered when the MCP server starts
 
-## Tool Categories
-
-| Category | Tools | Methods |
-|----------|-------|---------|
-| Object Operations | McpUnifiedObjectTool | 5 methods |
-| Asset & Material Management | McpUnifiedAssetTool | 5 methods |
-| Effect Systems | McpUnifiedEffectTool | 2 methods |
-| Scene Capture | McpSceneCaptureTool | 2 methods |
-| Prefab Editing | McpPrefabEditTool | 4 methods |
-| **Total** | **5 Tools** | **18 Methods** |
-
-## Requirements
-
-- Unity 2021.3 or later
-- Unity Natural MCP server
-- UniTask package
-- Model Context Protocol SDK
-
-## Implementation Details
-
-Each tool follows a consistent pattern:
-- Decorated with `[McpServerToolType]` attribute
-- Methods decorated with `[McpServerTool]` attribute
-- Async operations using UniTask
-- Proper error handling and logging
-- Main thread synchronization for Unity API calls
-
 ## License
 
 MIT License - This project extends Unity Natural MCP which is also licensed under MIT.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
 
 ## Acknowledgments
 
 - [notargs](https://github.com/notargs) for creating Unity Natural MCP
 - Unity Technologies for the Unity Editor API
 - Anthropic for the Model Context Protocol
-
-## Support
-
-For issues specific to these extension tools, please open an issue in this repository.
-For Unity Natural MCP core functionality, please refer to the [original repository](https://github.com/notargs/UnityNaturalMCP).
