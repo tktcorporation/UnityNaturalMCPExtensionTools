@@ -89,3 +89,7 @@ MIT License - This project extends Unity Natural MCP which is also licensed unde
 - [notargs](https://github.com/notargs) for creating Unity Natural MCP
 - Unity Technologies for the Unity Editor API
 - Anthropic for the Model Context Protocol
+
+## Contribution by ambr, Inc.
+
+This project was developed with the support of ambr, Inc.

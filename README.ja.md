@@ -90,3 +90,7 @@ MIT License - このプロジェクトは、同じくMITライセンスのUnity 
 - Unity Natural MCPを作成した[notargs](https://github.com/notargs)氏
 - Unity Editor APIを提供するUnity Technologies
 - Model Context Protocolを開発したAnthropic
+
+## ambr, Inc.の貢献について
+
+本プロジェクトはambr, Inc.のサポートの元開発されました。
