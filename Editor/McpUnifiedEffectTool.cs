@@ -858,5 +858,215 @@ namespace UnityNaturalMCPExtension.Editor
             };
         }
 
+        [McpServerTool, Description("Configure particle system using structured configuration")]
+        public async ValueTask<string> ConfigureParticleSystemAdvanced(
+            [Description("Name of the GameObject")]
+            string objectName,
+            [Description("Particle system configuration as JSON")]
+            string configurationJson,
+            [Description("Create new particle system if none exists")]
+            bool createNew = false,
+            [Description("Name for new particle system (optional, defaults to 'Particle System')")]
+            string particleSystemName = null,
+            [Description("Configure in Prefab mode context instead of scene (optional, default: false)")]
+            bool inPrefabMode = false)
+        {
+            return await ExecuteOperation(async () =>
+            {
+                await ValidatePrefabMode(inPrefabMode);
+
+                var gameObject = await FindGameObjectSafe(objectName, inPrefabMode);
+                var particleSystem = FindParticleSystem(objectName, inPrefabMode);
+
+                if (particleSystem == null && createNew)
+                {
+                    var psGameObject = new GameObject(particleSystemName ?? "Particle System");
+                    psGameObject.transform.SetParent(gameObject.transform);
+                    psGameObject.transform.localPosition = Vector3.zero;
+                    particleSystem = psGameObject.AddComponent<ParticleSystem>();
+                    AssignDefaultMaterial(particleSystem);
+                }
+                else if (particleSystem == null)
+                {
+                    return McpToolUtilities.CreateErrorMessage($"No ParticleSystem found on GameObject '{objectName}'. Set createNew=true to create one.");
+                }
+
+                // Parse configuration using McpConfigurationManager
+                if (!McpConfigurationManager.TryParseConfiguration<ParticleSystemConfiguration>(
+                    configurationJson, out var config, out var validationResult))
+                {
+                    return McpToolUtilities.CreateErrorMessage($"Configuration validation failed: {validationResult}");
+                }
+
+                var changes = new List<string>();
+
+                // Stop particle system if playing
+                bool wasPlaying = particleSystem.isPlaying;
+                if (wasPlaying)
+                {
+                    particleSystem.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                }
+
+                // Apply main module settings
+                if (config.main != null)
+                {
+                    ApplyMainModuleSettings(particleSystem, config.main, changes);
+                }
+
+                // Apply emission settings
+                if (config.emission != null)
+                {
+                    ApplyEmissionSettings(particleSystem, config.emission, changes);
+                }
+
+                // Apply shape settings
+                if (config.shape != null)
+                {
+                    ApplyShapeSettings(particleSystem, config.shape, changes);
+                }
+
+                // Apply velocity settings
+                if (config.velocityOverLifetime != null)
+                {
+                    ApplyVelocitySettings(particleSystem, config.velocityOverLifetime, changes);
+                }
+
+                // Mark objects as dirty
+                EditorUtility.SetDirty(particleSystem.gameObject);
+                MarkSceneDirty(inPrefabMode);
+
+                // Restart if it was playing
+                if (wasPlaying)
+                {
+                    particleSystem.Play();
+                }
+
+                return McpToolUtilities.CreateSuccessMessage(
+                    $"Configured ParticleSystem on '{objectName}' with {changes.Count} changes: {string.Join(", ", changes)}");
+            }, "configuring advanced particle system");
+        }
+
+        private void ApplyMainModuleSettings(ParticleSystem particleSystem, MainModuleSettings settings, List<string> changes)
+        {
+            var main = particleSystem.main;
+            
+            main.duration = settings.duration;
+            main.loop = settings.looping;
+            main.prewarm = settings.prewarm;
+            main.startLifetime = settings.startLifetime;
+            main.startSpeed = settings.startSpeed;
+            main.startSize = settings.startSize;
+            main.startRotation = settings.startRotation * Mathf.Deg2Rad;
+            main.gravityModifier = settings.gravityModifier;
+            main.maxParticles = settings.maxParticles;
+            
+            if (settings.startColor != null && settings.startColor.Length >= 4)
+            {
+                main.startColor = new Color(settings.startColor[0], settings.startColor[1], 
+                                          settings.startColor[2], settings.startColor[3]);
+            }
+
+            changes.Add("main module");
+        }
+
+        private void ApplyEmissionSettings(ParticleSystem particleSystem, EmissionSettings settings, List<string> changes)
+        {
+            var emission = particleSystem.emission;
+            
+            emission.enabled = settings.enabled;
+            emission.rateOverTime = settings.rateOverTime;
+            emission.rateOverDistance = settings.rateOverDistance;
+
+            if (settings.bursts != null && settings.bursts.Length > 0)
+            {
+                var bursts = new ParticleSystem.Burst[settings.bursts.Length];
+                for (int i = 0; i < settings.bursts.Length; i++)
+                {
+                    var burstSetting = settings.bursts[i];
+                    bursts[i] = new ParticleSystem.Burst(burstSetting.time, burstSetting.count, 
+                                                       burstSetting.cycles, burstSetting.interval)
+                    {
+                        probability = burstSetting.probability
+                    };
+                }
+                emission.SetBursts(bursts);
+            }
+
+            changes.Add("emission module");
+        }
+
+        private void ApplyShapeSettings(ParticleSystem particleSystem, ShapeSettings settings, List<string> changes)
+        {
+            var shape = particleSystem.shape;
+            
+            shape.enabled = settings.enabled;
+            
+            if (System.Enum.TryParse<ParticleSystemShapeType>(settings.shapeType, out var shapeType))
+            {
+                shape.shapeType = shapeType;
+            }
+            
+            shape.angle = settings.angle;
+            shape.radius = settings.radius;
+            shape.radiusThickness = settings.radiusThickness;
+            shape.arc = settings.arc;
+            shape.length = settings.length;
+
+            if (settings.position != null && settings.position.Length >= 3)
+            {
+                shape.position = new Vector3(settings.position[0], settings.position[1], settings.position[2]);
+            }
+
+            if (settings.rotation != null && settings.rotation.Length >= 3)
+            {
+                shape.rotation = new Vector3(settings.rotation[0], settings.rotation[1], settings.rotation[2]);
+            }
+
+            if (settings.scale != null && settings.scale.Length >= 3)
+            {
+                shape.scale = new Vector3(settings.scale[0], settings.scale[1], settings.scale[2]);
+            }
+
+            changes.Add("shape module");
+        }
+
+        private void ApplyVelocitySettings(ParticleSystem particleSystem, VelocitySettings settings, List<string> changes)
+        {
+            var velocity = particleSystem.velocityOverLifetime;
+            
+            velocity.enabled = settings.enabled;
+            
+            if (settings.linear != null && settings.linear.Length >= 3)
+            {
+                velocity.x = settings.linear[0];
+                velocity.y = settings.linear[1];
+                velocity.z = settings.linear[2];
+            }
+
+            if (settings.orbital != null && settings.orbital.Length >= 3)
+            {
+                velocity.orbitalX = settings.orbital[0];
+                velocity.orbitalY = settings.orbital[1];
+                velocity.orbitalZ = settings.orbital[2];
+            }
+
+            if (settings.offset != null && settings.offset.Length >= 3)
+            {
+                velocity.orbitalOffsetX = settings.offset[0];
+                velocity.orbitalOffsetY = settings.offset[1];
+                velocity.orbitalOffsetZ = settings.offset[2];
+            }
+
+            velocity.radial = settings.radial;
+            velocity.speedModifier = settings.speedModifier;
+
+            if (System.Enum.TryParse<ParticleSystemSimulationSpace>(settings.space, out var space))
+            {
+                velocity.space = space;
+            }
+
+            changes.Add("velocity over lifetime module");
+        }
+
     }
 }
