@@ -17,31 +17,20 @@ namespace UnityNaturalMCPExtension.Editor
     [McpServerToolType, Description("Unified material and asset management tools for Unity")]
     internal sealed class McpUnifiedAssetTool : McpToolBase
     {
-        [McpServerTool, Description("Create or update materials with multiple properties in one call")]
+        [McpServerTool, Description("Create or update materials using structured configuration")]
         public async ValueTask<string> ManageMaterial(
-            [Description("Material name")]
-            string materialName,
+            [Description("Material configuration JSON or structured settings")]
+            string configurationJson,
             [Description("Operation: 'create' or 'update'")]
-            string operation,
-            [Description("Shader name (for create, optional for update)")]
-            string shaderName = null,
-            [Description("Base color [R,G,B,A] (optional)")]
-            float[] baseColor = null,
-            [Description("Metallic value 0-1 (optional)")]
-            float? metallic = null,
-            [Description("Smoothness value 0-1 (optional)")]
-            float? smoothness = null,
-            [Description("Emission color [R,G,B] with optional intensity (optional)")]
-            float[] emission = null,
-            [Description("Emission intensity multiplier (optional, default: 1.0)")]
-            float emissionIntensity = 1.0f,
-            [Description("Additional properties as key-value pairs (optional)")]
-            Dictionary<string, float> additionalFloatProperties = null,
-            [Description("Additional color properties as key-value pairs (optional)")]
-            Dictionary<string, float[]> additionalColorProperties = null)
+            string operation)
         {
-            return await ExecuteWithErrorHandling(async () =>
+            return await ExecuteOperation(async () =>
             {
+                // Parse and validate configuration
+                if (!McpConfigurationManager.TryParseConfiguration<MaterialConfiguration>(configurationJson, out var config, out var validationResult))
+                {
+                    return McpToolUtilities.CreateErrorMessage("ManageMaterial", $"Configuration validation failed: {validationResult}");
+                }
 
                 Material material = null;
                 var changes = new List<string>();
@@ -49,53 +38,40 @@ namespace UnityNaturalMCPExtension.Editor
                 switch (operation?.ToLower())
                 {
                     case "create":
-                        if (string.IsNullOrEmpty(shaderName))
-                            shaderName = "Universal Render Pipeline/Lit";
-
-                        var shader = Shader.Find(shaderName);
+                        var shader = Shader.Find(config.shaderName);
                         if (shader == null)
-                            return McpToolUtilities.CreateErrorMessage("ManageMaterial", $"Shader '{shaderName}' not found");
+                            return McpToolUtilities.CreateErrorMessage("ManageMaterial", $"Shader '{config.shaderName}' not found");
 
                         material = new Material(shader);
-                        material.name = materialName;
+                        material.name = config.materialName;
 
-                        var path = $"Assets/Materials/{materialName}.mat";
+                        var path = $"Assets/Materials/{config.materialName}.mat";
 
                         if (!AssetDatabase.IsValidFolder("Assets/Materials"))
                             AssetDatabase.CreateFolder("Assets", "Materials");
 
                         AssetDatabase.CreateAsset(material, path);
-                        changes.Add($"created at '{path}' with shader '{shaderName}'");
+                        changes.Add($"created at '{path}' with shader '{config.shaderName}'");
                         break;
 
                     case "update":
-                        material = FindMaterial(materialName);
+                        material = FindMaterial(config.materialName);
                         if (material == null)
-                            return McpToolUtilities.CreateErrorMessage("ManageMaterial", $"Material '{materialName}' not found");
-
-                        if (!string.IsNullOrEmpty(shaderName))
-                        {
-                            var newShader = Shader.Find(shaderName);
-                            if (newShader != null)
-                            {
-                                material.shader = newShader;
-                                changes.Add($"shader: {shaderName}");
-                            }
-                        }
+                            return McpToolUtilities.CreateErrorMessage("ManageMaterial", $"Material '{config.materialName}' not found");
                         break;
 
                     default:
                         return McpToolUtilities.CreateErrorMessage("ManageMaterial", "operation must be 'create' or 'update'");
                 }
 
-                // Apply properties
-                if (baseColor != null && baseColor.Length >= 3)
+                // Apply base color
+                if (config.baseColor != null && config.baseColor.Length >= 3)
                 {
                     var color = new Color(
-                        baseColor[0],
-                        baseColor[1],
-                        baseColor[2],
-                        baseColor.Length > 3 ? baseColor[3] : 1.0f
+                        config.baseColor[0],
+                        config.baseColor[1],
+                        config.baseColor[2],
+                        config.baseColor.Length > 3 ? config.baseColor[3] : 1.0f
                     );
 
                     if (material.HasProperty("_BaseColor"))
@@ -106,58 +82,107 @@ namespace UnityNaturalMCPExtension.Editor
                     changes.Add($"baseColor: ({color.r:F2}, {color.g:F2}, {color.b:F2}, {color.a:F2})");
                 }
 
-                if (metallic.HasValue && material.HasProperty("_Metallic"))
+                // Apply metallic
+                if (material.HasProperty("_Metallic"))
                 {
-                    material.SetFloat("_Metallic", metallic.Value);
-                    changes.Add($"metallic: {metallic.Value:F2}");
+                    material.SetFloat("_Metallic", config.metallic);
+                    changes.Add($"metallic: {config.metallic:F2}");
                 }
 
-                if (smoothness.HasValue && material.HasProperty("_Smoothness"))
+                // Apply smoothness
+                if (material.HasProperty("_Smoothness"))
                 {
-                    material.SetFloat("_Smoothness", smoothness.Value);
-                    changes.Add($"smoothness: {smoothness.Value:F2}");
+                    material.SetFloat("_Smoothness", config.smoothness);
+                    changes.Add($"smoothness: {config.smoothness:F2}");
                 }
 
-                if (emission != null && emission.Length >= 3 && material.HasProperty("_EmissionColor"))
+                // Apply emission
+                if (config.emission != null && config.emission.Length >= 3 && material.HasProperty("_EmissionColor"))
                 {
                     var emissionColor = new Color(
-                        emission[0] * emissionIntensity,
-                        emission[1] * emissionIntensity,
-                        emission[2] * emissionIntensity,
+                        config.emission[0] * config.emissionIntensity,
+                        config.emission[1] * config.emissionIntensity,
+                        config.emission[2] * config.emissionIntensity,
                         1.0f
                     );
                     material.SetColor("_EmissionColor", emissionColor);
                     material.EnableKeyword("_EMISSION");
-                    changes.Add($"emission: ({emissionColor.r:F2}, {emissionColor.g:F2}, {emissionColor.b:F2}) intensity: {emissionIntensity:F2}");
+                    changes.Add($"emission: ({emissionColor.r:F2}, {emissionColor.g:F2}, {emissionColor.b:F2}) intensity: {config.emissionIntensity:F2}");
                 }
 
                 // Apply additional properties
-                if (additionalFloatProperties != null)
+                if (config.additionalProperties != null)
                 {
-                    foreach (var prop in additionalFloatProperties)
+                    foreach (var prop in config.additionalProperties)
                     {
-                        if (material.HasProperty(prop.Key))
-                        {
-                            material.SetFloat(prop.Key, prop.Value);
-                            changes.Add($"{prop.Key}: {prop.Value:F2}");
-                        }
-                    }
-                }
+                        if (!material.HasProperty(prop.Key))
+                            continue;
 
-                if (additionalColorProperties != null)
-                {
-                    foreach (var prop in additionalColorProperties)
-                    {
-                        if (material.HasProperty(prop.Key) && prop.Value.Length >= 3)
+                        var shader = material.shader;
+                        var propertyIndex = shader.FindPropertyIndex(prop.Key);
+                        if (propertyIndex == -1)
+                            continue;
+
+                        var propertyType = shader.GetPropertyType(propertyIndex);
+
+                        try
                         {
-                            var color = new Color(
-                                prop.Value[0],
-                                prop.Value[1],
-                                prop.Value[2],
-                                prop.Value.Length > 3 ? prop.Value[3] : 1.0f
-                            );
-                            material.SetColor(prop.Key, color);
-                            changes.Add($"{prop.Key}: ({color.r:F2}, {color.g:F2}, {color.b:F2}, {color.a:F2})");
+                            switch (propertyType)
+                            {
+                                case UnityEngine.Rendering.ShaderPropertyType.Float:
+                                case UnityEngine.Rendering.ShaderPropertyType.Range:
+                                    if (prop.Value is float floatVal)
+                                    {
+                                        material.SetFloat(prop.Key, floatVal);
+                                        changes.Add($"{prop.Key}: {floatVal:F2}");
+                                    }
+                                    else if (float.TryParse(prop.Value?.ToString(), out floatVal))
+                                    {
+                                        material.SetFloat(prop.Key, floatVal);
+                                        changes.Add($"{prop.Key}: {floatVal:F2}");
+                                    }
+                                    break;
+
+                                case UnityEngine.Rendering.ShaderPropertyType.Color:
+                                    if (prop.Value is float[] colorArray && colorArray.Length >= 3)
+                                    {
+                                        var color = new Color(
+                                            colorArray[0],
+                                            colorArray[1],
+                                            colorArray[2],
+                                            colorArray.Length > 3 ? colorArray[3] : 1.0f
+                                        );
+                                        material.SetColor(prop.Key, color);
+                                        changes.Add($"{prop.Key}: ({color.r:F2}, {color.g:F2}, {color.b:F2}, {color.a:F2})");
+                                    }
+                                    break;
+
+                                case UnityEngine.Rendering.ShaderPropertyType.Vector:
+                                    if (prop.Value is float[] vectorArray && vectorArray.Length >= 4)
+                                    {
+                                        var vector = new Vector4(vectorArray[0], vectorArray[1], vectorArray[2], vectorArray[3]);
+                                        material.SetVector(prop.Key, vector);
+                                        changes.Add($"{prop.Key}: ({vector.x:F2}, {vector.y:F2}, {vector.z:F2}, {vector.w:F2})");
+                                    }
+                                    break;
+
+                                case UnityEngine.Rendering.ShaderPropertyType.Int:
+                                    if (prop.Value is int intVal)
+                                    {
+                                        material.SetInt(prop.Key, intVal);
+                                        changes.Add($"{prop.Key}: {intVal}");
+                                    }
+                                    else if (int.TryParse(prop.Value?.ToString(), out intVal))
+                                    {
+                                        material.SetInt(prop.Key, intVal);
+                                        changes.Add($"{prop.Key}: {intVal}");
+                                    }
+                                    break;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogWarning($"Failed to set property '{prop.Key}': {ex.Message}");
                         }
                     }
                 }
@@ -166,8 +191,8 @@ namespace UnityNaturalMCPExtension.Editor
                 AssetDatabase.SaveAssets();
 
                 return changes.Count > 0
-                    ? McpToolUtilities.CreateSuccessMessage($"{operation}d material", materialName, string.Join(", ", changes))
-                    : McpToolUtilities.CreateSuccessMessage($"Material {operation}d", materialName, "no property changes");
+                    ? McpToolUtilities.CreateSuccessMessage($"{operation}d material", config.materialName, string.Join(", ", changes))
+                    : McpToolUtilities.CreateSuccessMessage($"Material {operation}d", config.materialName, "no property changes");
             }, "ManageMaterial");
         }
 
