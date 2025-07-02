@@ -190,7 +190,7 @@ namespace UnityNaturalMCPExtension.Editor
             {
                 await UniTask.SwitchToMainThread();
 
-                var gameObject = GameObject.Find(objectName);
+                var gameObject = McpToolUtilities.FindGameObjectInScene(objectName);
                 if (gameObject == null)
                     return $"Error: GameObject '{objectName}' not found";
 
@@ -307,7 +307,7 @@ namespace UnityNaturalMCPExtension.Editor
                         if (string.IsNullOrEmpty(objectName) || string.IsNullOrEmpty(path))
                             return "Error: Both objectName and path are required for createPrefab";
 
-                        var gameObject = GameObject.Find(objectName);
+                        var gameObject = McpToolUtilities.FindGameObjectInScene(objectName);
                         if (gameObject == null)
                             return $"Error: GameObject '{objectName}' not found in scene";
 
@@ -533,5 +533,6 @@ namespace UnityNaturalMCPExtension.Editor
                 return $"Error getting prefab asset info: {e.Message}";
             }
         }
+
     }
 }

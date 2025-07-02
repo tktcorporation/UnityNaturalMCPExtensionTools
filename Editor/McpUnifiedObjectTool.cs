@@ -109,7 +109,7 @@ namespace UnityNaturalMCPExtension.Editor
                 // Set parent
                 if (!string.IsNullOrEmpty(parentName))
                 {
-                    var parent = FindGameObjectInContext(parentName, inPrefabMode);
+                    var parent = McpToolUtilities.FindGameObject(parentName, inPrefabMode);
                     if (parent != null)
                         gameObject.transform.SetParent(parent.transform);
                 }
@@ -184,7 +184,7 @@ namespace UnityNaturalMCPExtension.Editor
                         return "Error: Prefab mode is not active. Please open a prefab first.";
                 }
 
-                var gameObject = FindGameObjectInContext(objectName, inPrefabMode);
+                var gameObject = McpToolUtilities.FindGameObject(objectName, inPrefabMode);
                 if (gameObject == null)
                     return $"Error: GameObject '{objectName}' not found{(inPrefabMode ? " in Prefab mode" : " in scene")}";
 
@@ -220,7 +220,7 @@ namespace UnityNaturalMCPExtension.Editor
                         Transform newParent = null;
                         if (!string.IsNullOrEmpty(parentName))
                         {
-                            var parentObj = FindGameObjectInContext(parentName, inPrefabMode);
+                            var parentObj = McpToolUtilities.FindGameObject(parentName, inPrefabMode);
                             if (parentObj == null)
                                 return $"Error: Parent GameObject '{parentName}' not found{(inPrefabMode ? " in Prefab mode" : " in scene")}";
                             newParent = parentObj.transform;
@@ -393,7 +393,7 @@ namespace UnityNaturalMCPExtension.Editor
                         return "Error: Prefab mode is not active. Please open a prefab first.";
                 }
 
-                var gameObject = FindGameObjectInContext(objectName, inPrefabMode);
+                var gameObject = McpToolUtilities.FindGameObject(objectName, inPrefabMode);
                 if (gameObject == null)
                     return $"Error: GameObject '{objectName}' not found{(inPrefabMode ? " in Prefab mode" : " in scene")}";
 
@@ -515,7 +515,7 @@ namespace UnityNaturalMCPExtension.Editor
                         return "Error: Prefab mode is not active. Please open a prefab first.";
                 }
 
-                var gameObject = FindGameObjectInContext(objectName, inPrefabMode);
+                var gameObject = McpToolUtilities.FindGameObject(objectName, inPrefabMode);
                 if (gameObject == null)
                     return $"Error: GameObject '{objectName}' not found{(inPrefabMode ? " in Prefab mode" : " in scene")}";
 
@@ -1280,38 +1280,6 @@ namespace UnityNaturalMCPExtension.Editor
             }
         }
 
-        private GameObject FindGameObjectInContext(string objectName, bool inPrefabMode)
-        {
-            if (string.IsNullOrEmpty(objectName))
-                return null;
-
-            if (inPrefabMode)
-            {
-                var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
-                if (prefabStage == null)
-                {
-                    Debug.LogError("Prefab mode is not active");
-                    return null;
-                }
-
-                var root = prefabStage.prefabContentsRoot;
-                if (root.name == objectName)
-                    return root;
-
-                // Search in children
-                foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
-                {
-                    if (child.name == objectName)
-                        return child.gameObject;
-                }
-
-                return null;
-            }
-            else
-            {
-                return GameObject.Find(objectName);
-            }
-        }
 
         private UnityEngine.Object ResolveObjectReference(string objectName, Type targetType, bool inPrefabMode)
         {
@@ -1331,7 +1299,7 @@ namespace UnityNaturalMCPExtension.Editor
             if (IsSceneObjectType(targetType))
             {
                 Debug.Log($"Type {targetType.Name} is a scene object type, searching in scene");
-                var gameObject = FindGameObjectInContext(objectName, inPrefabMode);
+                var gameObject = McpToolUtilities.FindGameObject(objectName, inPrefabMode);
                 if (gameObject == null)
                 {
                     Debug.LogWarning($"GameObject '{objectName}' not found in {(inPrefabMode ? "Prefab mode" : "scene")}");
@@ -1358,7 +1326,7 @@ namespace UnityNaturalMCPExtension.Editor
             if (targetType == typeof(GameObject))
             {
                 Debug.Log($"Type is GameObject, searching in scene first");
-                var gameObject = FindGameObjectInContext(objectName, inPrefabMode);
+                var gameObject = McpToolUtilities.FindGameObject(objectName, inPrefabMode);
                 if (gameObject != null)
                 {
                     Debug.Log($"Found GameObject '{objectName}' in {(inPrefabMode ? "Prefab mode" : "scene")}");

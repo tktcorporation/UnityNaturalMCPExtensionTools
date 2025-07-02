@@ -209,7 +209,7 @@ namespace UnityNaturalMCPExtension.Editor
                 await UniTask.SwitchToMainThread();
 
                 // オブジェクトを検索
-                var gameObject = GameObject.Find(objectName);
+                var gameObject = McpToolUtilities.FindGameObjectInScene(objectName);
                 if (gameObject == null)
                 {
                     return $"エラー: オブジェクト '{objectName}' が見つかりません";
@@ -283,7 +283,7 @@ namespace UnityNaturalMCPExtension.Editor
                 await UniTask.SwitchToMainThread();
 
                 // オブジェクトを検索
-                var gameObject = GameObject.Find(objectName);
+                var gameObject = McpToolUtilities.FindGameObjectInScene(objectName);
                 if (gameObject == null)
                 {
                     return $"エラー: オブジェクト '{objectName}' が見つかりません";
@@ -350,7 +350,7 @@ namespace UnityNaturalMCPExtension.Editor
                 await UniTask.SwitchToMainThread();
 
                 // オブジェクトを検索
-                var gameObject = GameObject.Find(objectName);
+                var gameObject = McpToolUtilities.FindGameObjectInScene(objectName);
                 if (gameObject == null)
                 {
                     return $"エラー: オブジェクト '{objectName}' が見つかりません";
@@ -432,7 +432,7 @@ namespace UnityNaturalMCPExtension.Editor
                 await UniTask.SwitchToMainThread();
 
                 // オブジェクトを検索
-                var gameObject = GameObject.Find(objectName);
+                var gameObject = McpToolUtilities.FindGameObjectInScene(objectName);
                 if (gameObject == null)
                 {
                     return $"エラー: オブジェクト '{objectName}' が見つかりません";
@@ -529,5 +529,6 @@ namespace UnityNaturalMCPExtension.Editor
                 return $"エラー: {e.Message}";
             }
         }
+
     }
 }

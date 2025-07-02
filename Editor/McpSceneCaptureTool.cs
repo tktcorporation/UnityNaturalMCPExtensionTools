@@ -44,7 +44,7 @@ namespace UnityNaturalMCPExtension.Editor
                 Camera sourceCamera = null;
                 if (!string.IsNullOrEmpty(cameraName))
                 {
-                    var cameraObj = GameObject.Find(cameraName);
+                    var cameraObj = McpToolUtilities.FindGameObjectInScene(cameraName);
                     if (cameraObj != null)
                         sourceCamera = cameraObj.GetComponent<Camera>();
                 }
@@ -56,7 +56,7 @@ namespace UnityNaturalMCPExtension.Editor
                     if (sourceCamera == null)
                     {
                         // Find any camera in the scene
-                        sourceCamera = GameObject.FindObjectOfType<Camera>();
+                        sourceCamera = FindCameraInScene();
                         if (sourceCamera == null)
                             return "Error: No camera found in the scene";
                     }
@@ -151,7 +151,7 @@ namespace UnityNaturalMCPExtension.Editor
                 
                 if (sourceCamera == null)
                 {
-                    sourceCamera = GameObject.FindObjectOfType<Camera>();
+                    sourceCamera = FindCameraInScene();
                     if (sourceCamera == null)
                     {
                         // Create a temporary camera if none exists
@@ -866,6 +866,28 @@ namespace UnityNaturalMCPExtension.Editor
 
             // // ⑤ 記憶したワールド座標を返却
             // return worldPosition;
+        }
+
+
+        private Camera FindCameraInScene()
+        {
+            // Use Resources.FindObjectsOfTypeAll to find both active and inactive cameras
+            var allCameras = Resources.FindObjectsOfTypeAll<Camera>();
+            
+            foreach (var camera in allCameras)
+            {
+                // Skip cameras not in the active scene
+                if (camera.gameObject.scene != EditorSceneManager.GetActiveScene())
+                    continue;
+                
+                // Skip persistent objects (prefab assets)
+                if (EditorUtility.IsPersistent(camera.gameObject))
+                    continue;
+                
+                return camera;
+            }
+            
+            return null;
         }
     }
 }
