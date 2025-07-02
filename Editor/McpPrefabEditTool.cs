@@ -11,7 +11,7 @@ using ModelContextProtocol.Server;
 namespace UnityNaturalMCPExtension.Editor
 {
     [McpServerToolType, Description("Prefab編集モード管理ツール")]
-    internal sealed class McpPrefabEditTool
+    internal sealed class McpPrefabEditTool : McpToolBase
     {
         [McpServerTool, Description("Prefabを編集モードで開く")]
         public async ValueTask<string> OpenPrefabMode(
@@ -204,28 +204,21 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("適用する特定のプロパティパス（カンマ区切り、省略時は全て適用）")] string propertyPaths = null,
             [Description("全ての変更を適用するかどうか（デフォルト: true）")] bool applyAll = true)
         {
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
-
-                // オブジェクトを検索
-                var gameObject = McpToolUtilities.FindGameObjectInScene(objectName);
-                if (gameObject == null)
-                {
-                    return $"エラー: オブジェクト '{objectName}' が見つかりません";
-                }
+                var gameObject = await FindGameObjectSafe(objectName, false);
 
                 // Prefabインスタンスかどうかを確認
                 var prefabStatus = PrefabUtility.GetPrefabInstanceStatus(gameObject);
                 if (prefabStatus == PrefabInstanceStatus.NotAPrefab)
                 {
-                    return $"エラー: '{objectName}' はPrefabインスタンスではありません";
+                    return McpToolUtilities.CreateErrorMessage($"'{objectName}' はPrefabインスタンスではありません");
                 }
 
                 var prefabAsset = PrefabUtility.GetCorrespondingObjectFromSource(gameObject);
                 if (prefabAsset == null)
                 {
-                    return $"エラー: '{objectName}' のソースPrefabが見つかりません";
+                    return McpToolUtilities.CreateErrorMessage($"'{objectName}' のソースPrefabが見つかりません");
                 }
 
                 var assetPath = AssetDatabase.GetAssetPath(prefabAsset);
@@ -264,12 +257,7 @@ namespace UnityNaturalMCPExtension.Editor
                         return $"エラー: Prefabインスタンス '{objectName}' の変更の適用に失敗しました: {applyEx.Message}";
                     }
                 }
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"ApplyPrefabInstanceChanges エラー: {e}");
-                return $"エラー: {e.Message}";
-            }
+            }, "applying prefab instance changes");
         }
 
         [McpServerTool, Description("PrefabインスタンスのオーバーライドをソースPrefabの状態に戻す")]
@@ -278,28 +266,21 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("戻す特定のプロパティパス（カンマ区切り、省略時は全て戻す）")] string propertyPaths = null,
             [Description("全ての変更を戻すかどうか（デフォルト: true）")] bool revertAll = true)
         {
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
-
-                // オブジェクトを検索
-                var gameObject = McpToolUtilities.FindGameObjectInScene(objectName);
-                if (gameObject == null)
-                {
-                    return $"エラー: オブジェクト '{objectName}' が見つかりません";
-                }
+                var gameObject = await FindGameObjectSafe(objectName, false);
 
                 // Prefabインスタンスかどうかを確認
                 var prefabStatus = PrefabUtility.GetPrefabInstanceStatus(gameObject);
                 if (prefabStatus == PrefabInstanceStatus.NotAPrefab)
                 {
-                    return $"エラー: '{objectName}' はPrefabインスタンスではありません";
+                    return McpToolUtilities.CreateErrorMessage($"'{objectName}' はPrefabインスタンスではありません");
                 }
 
                 var prefabAsset = PrefabUtility.GetCorrespondingObjectFromSource(gameObject);
                 if (prefabAsset == null)
                 {
-                    return $"エラー: '{objectName}' のソースPrefabが見つかりません";
+                    return McpToolUtilities.CreateErrorMessage($"'{objectName}' のソースPrefabが見つかりません");
                 }
 
                 var assetPath = AssetDatabase.GetAssetPath(prefabAsset);
@@ -310,12 +291,13 @@ namespace UnityNaturalMCPExtension.Editor
                     try
                     {
                         PrefabUtility.RevertPrefabInstance(gameObject, InteractionMode.AutomatedAction);
-                        return $"Prefabインスタンス '{objectName}' の全ての変更をソースPrefab '{assetPath}' の状態に戻しました";
+                        MarkSceneDirty(false);
+                        return McpToolUtilities.CreateSuccessMessage($"Prefabインスタンス '{objectName}' の全ての変更をソースPrefab '{assetPath}' の状態に戻しました");
                     }
                     catch (Exception revertEx)
                     {
                         Debug.LogError($"RevertPrefabInstance failed: {revertEx}");
-                        return $"エラー: Prefabインスタンス '{objectName}' の変更の復元に失敗しました: {revertEx.Message}";
+                        return McpToolUtilities.CreateErrorMessage($"Prefabインスタンス '{objectName}' の変更の復元に失敗しました: {revertEx.Message}");
                     }
                 }
                 else
@@ -325,20 +307,16 @@ namespace UnityNaturalMCPExtension.Editor
                     try
                     {
                         PrefabUtility.RevertPrefabInstance(gameObject, InteractionMode.AutomatedAction);
-                        return $"Prefabインスタンス '{objectName}' の変更をソースPrefab '{assetPath}' の状態に戻しました（指定されたプロパティパス: '{propertyPaths}'）";
+                        MarkSceneDirty(false);
+                        return McpToolUtilities.CreateSuccessMessage($"Prefabインスタンス '{objectName}' の変更をソースPrefab '{assetPath}' の状態に戻しました（指定されたプロパティパス: '{propertyPaths}'）");
                     }
                     catch (Exception revertEx)
                     {
                         Debug.LogError($"RevertPrefabInstance failed: {revertEx}");
-                        return $"エラー: Prefabインスタンス '{objectName}' の変更の復元に失敗しました: {revertEx.Message}";
+                        return McpToolUtilities.CreateErrorMessage($"Prefabインスタンス '{objectName}' の変更の復元に失敗しました: {revertEx.Message}");
                     }
                 }
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"RevertPrefabInstanceOverrides エラー: {e}");
-                return $"エラー: {e.Message}";
-            }
+            }, "reverting prefab instance overrides");
         }
 
         [McpServerTool, Description("Prefabインスタンスの状態と変更情報を取得")]

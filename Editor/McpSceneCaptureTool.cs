@@ -20,7 +20,7 @@ namespace UnityNaturalMCPExtension.Editor
     /// MCP tool for capturing Unity scene views to image files
     /// </summary>
     [McpServerToolType, Description("Scene capture tool for Unity Editor")]
-    internal sealed class McpSceneCaptureTool
+    internal sealed class McpSceneCaptureTool : McpToolBase
     {
         [McpServerTool, Description("Capture scene from camera view and save as PNG")]
         public async ValueTask<string> CaptureScene(
@@ -36,10 +36,8 @@ namespace UnityNaturalMCPExtension.Editor
             int height = 1080)
         {
             GameObject tempCameraObj = null;
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
-
                 // Find the camera
                 Camera sourceCamera = null;
                 if (!string.IsNullOrEmpty(cameraName))
@@ -58,7 +56,7 @@ namespace UnityNaturalMCPExtension.Editor
                         // Find any camera in the scene
                         sourceCamera = FindCameraInScene();
                         if (sourceCamera == null)
-                            return "Error: No camera found in the scene";
+                            return McpToolUtilities.CreateErrorMessage("No camera found in the scene");
                     }
                 }
 
@@ -110,22 +108,16 @@ namespace UnityNaturalMCPExtension.Editor
                 GameObject.DestroyImmediate(texture2D);
                 GameObject.DestroyImmediate(renderTexture);
 
-                Debug.Log($"Scene captured successfully using temporary camera: {fullPath}");
-                return $"Scene captured successfully to: {fullPath}";
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Failed to capture scene: {e}");
-                return $"Error: Failed to capture scene - {e.Message}";
-            }
-            finally
-            {
+                LogSuccess($"Scene captured successfully using temporary camera: {fullPath}");
+                
                 // Always cleanup the temporary camera
                 if (tempCameraObj != null)
                 {
                     GameObject.DestroyImmediate(tempCameraObj);
                 }
-            }
+                
+                return McpToolUtilities.CreateSuccessMessage($"Scene captured successfully to: {fullPath}");
+            }, "capturing scene");
         }
 
         [McpServerTool, Description("Capture Unity Game View and save as PNG")]
@@ -141,9 +133,8 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Camera rotation in euler angles [x,y,z] (optional)")]
             float[] rotation = null)
         {
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
 
                 // Find main camera or any camera in the scene
                 Camera sourceCamera = Camera.main;
@@ -231,12 +222,12 @@ namespace UnityNaturalMCPExtension.Editor
 
                     if (File.Exists(fullPath))
                     {
-                        Debug.Log($"Game View captured successfully: {fullPath}");
-                        return $"Game View captured successfully to: {fullPath}";
+                        LogSuccess($"Game View captured successfully: {fullPath}");
+                        return McpToolUtilities.CreateSuccessMessage($"Game View captured successfully to: {fullPath}");
                     }
                     else
                     {
-                        return "Error: Screenshot file was not created. Make sure Game View is visible.";
+                        return McpToolUtilities.CreateErrorMessage("Screenshot file was not created. Make sure Game View is visible.");
                     }
                 }
                 finally
@@ -255,20 +246,14 @@ namespace UnityNaturalMCPExtension.Editor
                     if (tempCameraCreated != null)
                         GameObject.DestroyImmediate(tempCameraCreated);
                 }
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Failed to capture Game View: {e}");
-                return $"Error: Failed to capture Game View - {e.Message}";
-            }
+            }, "capturing Game View");
         }
 
         [McpServerTool, Description("List all captured screenshots in SceneCapture folder")]
         public async ValueTask<string> ListCapturedScreenshots()
         {
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
 
                 var projectPath = Path.GetDirectoryName(Application.dataPath);
                 var captureDirectory = Path.Combine(projectPath, "SceneCapture");
@@ -288,12 +273,7 @@ namespace UnityNaturalMCPExtension.Editor
                 }
 
                 return fileListBuilder.ToString();
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Failed to list screenshots: {e}");
-                return $"Error: Failed to list screenshots - {e.Message}";
-            }
+            }, "listing screenshots");
         }
 
         [McpServerTool, Description("Capture UI Prefab in Prefab Mode and save as PNG. After capturing, Prefab mode will be closed without saving changes.")]
@@ -315,9 +295,8 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Treat as UI object (optional, null=auto-detect, true=UI, false=3D)")]
             bool? isUIObject = null)
         {
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
 
                 // If currently in Prefab mode, exit without saving
                 var currentStage = PrefabStageUtility.GetCurrentPrefabStage();
@@ -337,14 +316,14 @@ namespace UnityNaturalMCPExtension.Editor
                 var prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
                 if (prefabAsset == null)
                 {
-                    return $"Error: Prefab '{prefabPath}' not found";
+                    return McpToolUtilities.CreateErrorMessage($"Prefab '{prefabPath}' not found");
                 }
 
                 // Open prefab in Prefab Mode
                 var prefabStage = PrefabStageUtility.OpenPrefab(prefabPath);
                 if (prefabStage == null)
                 {
-                    return $"Error: Failed to open prefab '{prefabPath}' in Prefab Mode";
+                    return McpToolUtilities.CreateErrorMessage($"Failed to open prefab '{prefabPath}' in Prefab Mode");
                 }
 
                 try
@@ -616,7 +595,7 @@ namespace UnityNaturalMCPExtension.Editor
                     var camera = sceneView.camera;
                     if (camera == null)
                     {
-                        return "Error: Scene View camera not available";
+                        return McpToolUtilities.CreateErrorMessage("Scene View camera not available");
                     }
 
                     // Create render texture
@@ -665,7 +644,7 @@ namespace UnityNaturalMCPExtension.Editor
                         // Cleanup
                         GameObject.DestroyImmediate(texture2D);
 
-                        Debug.Log($"Prefab captured successfully: {fullPath}");
+                        LogSuccess($"Prefab captured successfully: {fullPath}");
 
                         // Restore camera state
                         sceneView.pivot = originalPivot;
@@ -673,7 +652,7 @@ namespace UnityNaturalMCPExtension.Editor
                         sceneView.size = originalSize;
                         sceneView.Repaint();
 
-                        return $"Prefab '{prefabPath}' captured successfully to: {fullPath}";
+                        return McpToolUtilities.CreateSuccessMessage($"Prefab '{prefabPath}' captured successfully to: {fullPath}");
                     }
                     finally
                     {
@@ -720,12 +699,7 @@ namespace UnityNaturalMCPExtension.Editor
                         PrefabStageUtility.OpenPrefab(originalPrefabPath);
                     }
                 }
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Failed to capture prefab view: {e}");
-                return $"Error: Failed to capture prefab view - {e.Message}";
-            }
+            }, "capturing prefab view");
         }
 
         /// <summary>
