@@ -63,8 +63,8 @@ namespace UnityNaturalMCPExtension.Editor
             {
                 var type = component.GetType();
 
-                // First try to find as a property (public properties)
-                var property = type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+                // First try to find as a property (including inheritance hierarchy)
+                var property = GetPropertyWithInheritance(type, propertyName);
                 if (property != null && property.CanWrite)
                 {
                     var convertedValue = ConvertValue(value, property.PropertyType, inPrefabMode);
@@ -72,8 +72,8 @@ namespace UnityNaturalMCPExtension.Editor
                     return PropertySetResult.Successful(propertyName, convertedValue);
                 }
 
-                // Then try to find as a field (including private SerializeFields)
-                var field = type.GetField(propertyName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                // Then try to find as a field (including private SerializeFields and inheritance hierarchy)
+                var field = GetFieldWithInheritance(type, propertyName);
                 if (field != null)
                 {
                     var convertedValue = ConvertValue(value, field.FieldType, inPrefabMode);
@@ -84,7 +84,7 @@ namespace UnityNaturalMCPExtension.Editor
                 // Property/field not found
                 var availableMembers = GetAvailableMembers(type);
                 return PropertySetResult.Failed(propertyName, 
-                    $"Property/field '{propertyName}' not found on {type.Name}. " +
+                    $"Property/field '{propertyName}' not found on {type.Name} (searched entire inheritance hierarchy). " +
                     $"Available members: {string.Join(", ", availableMembers)}");
             }
             catch (Exception e)
@@ -114,8 +114,8 @@ namespace UnityNaturalMCPExtension.Editor
                 for (int i = 0; i < parts.Length - 1; i++)
                 {
                     var propertyName = parts[i];
-                    var property = currentType.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
-                    var field = currentType.GetField(propertyName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    var property = GetPropertyWithInheritance(currentType, propertyName);
+                    var field = GetFieldWithInheritance(currentType, propertyName);
                     
                     if (property != null)
                     {
@@ -130,7 +130,7 @@ namespace UnityNaturalMCPExtension.Editor
                     else
                     {
                         return PropertySetResult.Failed(propertyPath, 
-                            $"Could not find property or field '{propertyName}' in path '{propertyPath}'");
+                            $"Could not find property or field '{propertyName}' in path '{propertyPath}' (searched inheritance hierarchy)");
                     }
                     
                     if (current == null)
@@ -142,8 +142,8 @@ namespace UnityNaturalMCPExtension.Editor
                 
                 // Set the final property
                 var finalPropertyName = parts[parts.Length - 1];
-                var finalProperty = currentType.GetProperty(finalPropertyName, BindingFlags.Public | BindingFlags.Instance);
-                var finalField = currentType.GetField(finalPropertyName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                var finalProperty = GetPropertyWithInheritance(currentType, finalPropertyName);
+                var finalField = GetFieldWithInheritance(currentType, finalPropertyName);
                 
                 if (finalProperty != null && finalProperty.CanWrite)
                 {
@@ -160,7 +160,7 @@ namespace UnityNaturalMCPExtension.Editor
                 else
                 {
                     return PropertySetResult.Failed(propertyPath, 
-                        $"Could not find writable property or field '{finalPropertyName}' at end of path");
+                        $"Could not find writable property or field '{finalPropertyName}' at end of path (searched inheritance hierarchy)");
                 }
             }
             catch (Exception e)
@@ -647,23 +647,95 @@ namespace UnityNaturalMCPExtension.Editor
             return true;
         }
         
-        private static List<string> GetAvailableMembers(Type type)
+        /// <summary>
+        /// Gets a property from the type hierarchy, including base classes
+        /// </summary>
+        private static PropertyInfo GetPropertyWithInheritance(Type type, string propertyName)
+        {
+            if (type == null || string.IsNullOrEmpty(propertyName))
+                return null;
+            
+            // Search through the inheritance hierarchy
+            Type currentType = type;
+            while (currentType != null)
+            {
+                var property = currentType.GetProperty(propertyName, 
+                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                if (property != null)
+                    return property;
+                
+                currentType = currentType.BaseType;
+            }
+            
+            return null;
+        }
+        
+        /// <summary>
+        /// Gets a field from the type hierarchy, including base classes
+        /// </summary>
+        private static FieldInfo GetFieldWithInheritance(Type type, string fieldName)
+        {
+            if (type == null || string.IsNullOrEmpty(fieldName))
+                return null;
+            
+            // Search through the inheritance hierarchy
+            Type currentType = type;
+            while (currentType != null)
+            {
+                var field = currentType.GetField(fieldName, 
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                if (field != null)
+                    return field;
+                
+                currentType = currentType.BaseType;
+            }
+            
+            return null;
+        }
+        
+        /// <summary>
+        /// Gets all members (properties and fields) from the type hierarchy for debugging
+        /// </summary>
+        private static List<string> GetAllMembersWithInheritance(Type type)
         {
             var members = new List<string>();
+            var processedMembers = new HashSet<string>();
             
-            // Get writable properties
-            var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .Where(p => p.CanWrite)
-                .Select(p => $"{p.Name} ({p.PropertyType.Name})");
-            members.AddRange(properties);
-            
-            // Get serialized fields
-            var fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                .Where(f => f.GetCustomAttribute<SerializeField>() != null || f.IsPublic)
-                .Select(f => $"{f.Name} ({f.FieldType.Name})");
-            members.AddRange(fields);
+            Type currentType = type;
+            while (currentType != null && currentType != typeof(object))
+            {
+                var typePrefix = currentType == type ? "" : $"[{currentType.Name}] ";
+                
+                // Get properties from current type
+                var properties = currentType.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                    .Where(p => p.CanWrite && !processedMembers.Contains(p.Name))
+                    .Select(p => 
+                    {
+                        processedMembers.Add(p.Name);
+                        return $"{typePrefix}{p.Name} ({p.PropertyType.Name})";
+                    });
+                members.AddRange(properties);
+                
+                // Get fields from current type
+                var fields = currentType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                    .Where(f => (f.GetCustomAttribute<SerializeField>() != null || f.IsPublic) && !processedMembers.Contains(f.Name))
+                    .Select(f => 
+                    {
+                        processedMembers.Add(f.Name);
+                        return $"{typePrefix}{f.Name} ({f.FieldType.Name})";
+                    });
+                members.AddRange(fields);
+                
+                currentType = currentType.BaseType;
+            }
             
             return members;
+        }
+        
+        private static List<string> GetAvailableMembers(Type type)
+        {
+            // Use the new inheritance-aware method
+            return GetAllMembersWithInheritance(type);
         }
         
         private static int LevenshteinDistance(string s1, string s2)
