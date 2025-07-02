@@ -49,31 +49,7 @@ namespace UnityNaturalMCPExtension.Editor
                 }
 
                 // Find the GameObject using the appropriate method
-                GameObject gameObject = null;
-                if (inPrefabMode)
-                {
-                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
-                    var root = prefabStage.prefabContentsRoot;
-                    if (root.name == objectName)
-                    {
-                        gameObject = root;
-                    }
-                    else
-                    {
-                        foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
-                        {
-                            if (child.name == objectName)
-                            {
-                                gameObject = child.gameObject;
-                                break;
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    gameObject = GameObject.Find(objectName);
-                }
+                GameObject gameObject = McpToolUtilities.FindGameObject(objectName, inPrefabMode);
                 
                 if (gameObject == null)
                     return $"Error: GameObject '{objectName}' not found{(inPrefabMode ? " in Prefab mode" : " in scene")}";
@@ -808,39 +784,7 @@ namespace UnityNaturalMCPExtension.Editor
 
         private ParticleSystem FindParticleSystem(string objectName, bool inPrefabMode = false)
         {
-            GameObject gameObject = null;
-            
-            if (inPrefabMode)
-            {
-                var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
-                if (prefabStage == null)
-                {
-                    Debug.LogError("Prefab mode is not active");
-                    return null;
-                }
-
-                var root = prefabStage.prefabContentsRoot;
-                if (root.name == objectName)
-                {
-                    gameObject = root;
-                }
-                else
-                {
-                    // Search in children
-                    foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
-                    {
-                        if (child.name == objectName)
-                        {
-                            gameObject = child.gameObject;
-                            break;
-                        }
-                    }
-                }
-            }
-            else
-            {
-                gameObject = GameObject.Find(objectName);
-            }
+            GameObject gameObject = McpToolUtilities.FindGameObject(objectName, inPrefabMode);
             
             if (gameObject == null)
                 return null;
@@ -914,5 +858,6 @@ namespace UnityNaturalMCPExtension.Editor
                 Debug.LogWarning($"Failed to assign default material to particle system: {e.Message}");
             }
         }
+
     }
 }
