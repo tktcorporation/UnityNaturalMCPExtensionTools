@@ -64,7 +64,7 @@ This is an extension of [Unity Natural MCP](https://github.com/notargs/UnityNatu
 2. Add this package to your Unity project via Package Manager
    
   ```
-  https://github.com/ambr-tech/UnityNaturalMCPExtensionTools.git
+  https://github.com/sack-kazu/UnityNaturalMCPExtensionTools.git
   ```
 
 3. The tools will be automatically registered when the MCP server starts
