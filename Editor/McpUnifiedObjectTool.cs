@@ -278,14 +278,13 @@ namespace UnityNaturalMCPExtension.Editor
             }, "ManipulateObject", inPrefabMode);
         }
 
+
         [McpServerTool, Description("Add or configure components on GameObjects")]
         public async ValueTask<string> ConfigureComponent(
             [Description("Name of the GameObject")]
             string objectName,
-            [Description("Component type (e.g., 'Rigidbody', 'BoxCollider', 'AudioSource', 'Renderer')")]
-            string componentType,
-            [Description("JSON string with component properties to set. For Unity object references, use object names as strings (e.g., {\"groundCheck\": \"GroundCheck\"}) (optional)")]
-            string properties = null,
+            [Description("JSON string with structured component configuration")]
+            string componentConfigurationJson,
             [Description("Configure in Prefab mode context instead of scene (optional, default: false)")]
             bool inPrefabMode = false)
         {
@@ -295,17 +294,27 @@ namespace UnityNaturalMCPExtension.Editor
                 if (gameObject == null)
                     return McpToolUtilities.CreateErrorMessage("ConfigureComponent", $"GameObject not found{(inPrefabMode ? " in Prefab mode" : " in scene")}", objectName);
 
+                // Parse and validate component configuration using McpConfigurationManager
+                bool isValid = McpConfigurationManager.TryParseConfiguration<ComponentConfiguration>(
+                    componentConfigurationJson, out var config, out var validationResult);
+                
+                if (!isValid)
+                {
+                    return McpToolUtilities.CreateErrorMessage("ConfigureComponent", 
+                        $"Invalid component configuration: {string.Join(", ", validationResult.Errors)}", objectName);
+                }
                 UnityEngine.Component component = null;
 
                 // Resolve component type using ComponentPropertyManager
-                var compType = ComponentPropertyManager.ResolveComponentType(componentType);
+                var compType = ComponentPropertyManager.ResolveComponentType(config.componentType);
 
                 if (compType == null)
                 {
                     // Try to suggest similar component names
-                    var suggestions = ComponentPropertyManager.GetComponentSuggestions(componentType);
+                    var suggestions = ComponentPropertyManager.GetComponentSuggestions(config.componentType);
                     var suggestionText = suggestions.Any() ? $" Did you mean: {string.Join(", ", suggestions)}?" : "";
-                    return $"Error: Component type '{componentType}' not found.{suggestionText}";
+                    return McpToolUtilities.CreateErrorMessage("ConfigureComponent", 
+                        $"Component type '{config.componentType}' not found.{suggestionText}", objectName);
                 }
 
                 // Check if component already exists
@@ -318,72 +327,60 @@ namespace UnityNaturalMCPExtension.Editor
                     try
                     {
                         component = gameObject.AddComponent(compType);
-                        Undo.RegisterCreatedObjectUndo(component, $"Add {componentType}");
+                        Undo.RegisterCreatedObjectUndo(component, $"Add {config.componentType}");
                         wasAdded = true;
                     }
                     catch (Exception e)
                     {
-                        return $"Error: Failed to add component '{componentType}': {e.Message}";
+                        return McpToolUtilities.CreateErrorMessage("ConfigureComponent", 
+                            $"Failed to add component '{config.componentType}': {e.Message}", objectName);
                     }
                 }
 
                 // Apply properties if provided
-                if (!string.IsNullOrEmpty(properties))
+                var changes = new List<string>();
+                var errors = new List<string>();
+
+                if (config.properties != null && config.properties.Count > 0)
                 {
-                    try
+                    foreach (var prop in config.properties)
                     {
-                        var propsDict = JsonConvert.DeserializeObject<Dictionary<string, object>>(properties);
-                        var changes = new List<string>();
-                        var errors = new List<string>();
-
-                        foreach (var prop in propsDict)
+                        // Check if this is a nested property (contains dot notation)
+                        ComponentPropertyManager.PropertySetResult result;
+                        if (prop.Key.Contains("."))
                         {
-                            // Check if this is a nested property (contains dot notation)
-                            ComponentPropertyManager.PropertySetResult result;
-                            if (prop.Key.Contains("."))
-                            {
-                                result = ComponentPropertyManager.SetNestedProperty(component, prop.Key, prop.Value, inPrefabMode);
-                            }
-                            else
-                            {
-                                result = ComponentPropertyManager.SetProperty(component, prop.Key, prop.Value, inPrefabMode);
-                            }
-                            
-                            if (result.Success)
-                            {
-                                changes.Add($"{prop.Key}: {prop.Value}");
-                            }
-                            else
-                            {
-                                errors.Add($"{prop.Key}: {result.ErrorMessage}");
-                            }
+                            result = ComponentPropertyManager.SetNestedProperty(component, prop.Key, prop.Value, inPrefabMode);
                         }
-
-                        EditorUtility.SetDirty(gameObject);
-
-                        var actionText = wasAdded ? "Added" : "Configured";
-                        var result_message = changes.Count > 0
-                            ? $"Successfully {actionText.ToLower()} {compType.Name} on '{objectName}': {string.Join(", ", changes)}"
-                            : $"{actionText} {compType.Name} to '{objectName}' but no properties were set";
-
-                        if (errors.Count > 0)
+                        else
                         {
-                            result_message += $"\nErrors: {string.Join("; ", errors)}";
+                            result = ComponentPropertyManager.SetProperty(component, prop.Key, prop.Value, inPrefabMode);
                         }
-
-                        return result_message;
-                    }
-                    catch (JsonException)
-                    {
-                        return $"Error: Invalid JSON format for properties. Expected format: {{\"propertyName\": value}}";
+                        
+                        if (result.Success)
+                        {
+                            changes.Add($"{prop.Key}: {prop.Value}");
+                        }
+                        else
+                        {
+                            errors.Add($"{prop.Key}: {result.ErrorMessage}");
+                        }
                     }
                 }
-                else
+
+                EditorUtility.SetDirty(gameObject);
+
+                var actionText = wasAdded ? "Added" : "Configured";
+                var result_message = changes.Count > 0
+                    ? $"Successfully {actionText.ToLower()} {compType.Name} on '{objectName}': {string.Join(", ", changes)}"
+                    : $"{actionText} {compType.Name} to '{objectName}' but no properties were set";
+
+                if (errors.Count > 0)
                 {
-                    EditorUtility.SetDirty(gameObject);
-                    var actionText = wasAdded ? "added" : "found existing";
-                    return McpToolUtilities.CreateSuccessMessage($"{actionText} {compType.Name}", objectName);
+                    result_message += $"\nErrors: {string.Join("; ", errors)}";
                 }
+
+                return result_message;
+
             }, "ConfigureComponent", inPrefabMode);
         }
 
