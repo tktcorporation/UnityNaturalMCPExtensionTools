@@ -4,7 +4,7 @@ This package provides unified custom MCP (Model Context Protocol) tools that ext
 
 ## パッケージ概要
 
-Unity Natural MCP サーバーの機能を拡張し、Unityエディタ操作の包括的な自動化を実現する統合型カスタムMCPツール群です。バージョン0.8.0では、Scene管理、Prefab編集モード、スクリーンショット機能を追加し、包括的な開発支援を実現しています。
+Unity Natural MCP サーバーの機能を拡張し、Unityエディタ操作の包括的な自動化を実現する統合型カスタムMCPツール群です。Scene管理、Prefab編集モード、スクリーンショット機能など、包括的な開発支援を提供します。
 
 ## ツール構成
 
@@ -13,13 +13,13 @@ Unity Natural MCP サーバーの機能を拡張し、Unityエディタ操作の
 | ツール名 | 責務 | 主要メソッド | メソッド数 |
 |---------|------|-------------|-----------|
 | **McpUnifiedObjectTool** | オブジェクト作成・操作・プロパティ設定 | CreateObject, ManipulateObject, ConfigureComponent, GetObjectInfo, ListSceneObjects | 5 |
-| **McpUnifiedAssetTool** | マテリアル・アセット・フォルダ管理 | ManageMaterial, AssignMaterialToRenderer, ListMaterials, ManageAsset, ListPrefabs | 5 |
-| **McpUnifiedEffectTool** | パーティクルシステム管理 | ConfigureParticleSystem, ControlParticleSystem | 2 |
-| **McpSceneCaptureTool** | シーンスクリーンショット機能 | CaptureScene, CaptureGameView, ListCapturedScreenshots | 3 |
-| **McpPrefabEditTool** | Prefab編集モード管理 | OpenPrefabMode, SavePrefabChanges, ExitPrefabMode, GetPrefabEditStatus | 4 |
+| **McpUnifiedAssetTool** | マテリアル・アセット・フォルダ管理 | ManageMaterial, AssignMaterialToRenderer, ListMaterials, ManageAsset, ListPrefabs, GetPrefabAssetInfo | 6 |
+| **McpUnifiedEffectTool** | パーティクルシステム管理 | ConfigureParticleSystem, ControlParticleSystem, GetParticleSystemInfo | 3 |
+| **McpSceneCaptureTool** | シーンスクリーンショット機能 | CaptureScene, CaptureGameView, ListCapturedScreenshots, CapturePrefabView | 4 |
+| **McpPrefabEditTool** | Prefab編集モード管理 | OpenPrefabMode, SavePrefabMode, ClosePrefabMode, GetPrefabModeStatus, ApplyPrefabInstanceChanges, RevertPrefabInstanceOverrides, GetPrefabInstanceInfo, ListPrefabInstanceOverrides | 8 |
 | **McpSceneManagementTool** | Scene作成・管理・操作 | CreateScene, SaveScene, LoadScene, ListScenes, GetActiveSceneInfo, CloseScene | 6 |
 | **McpProjectSettingsTool** | プロジェクト設定管理 | ManageProjectLayers | 1 |
-| **合計** | **全領域カバー** | **全26メソッド** | **26** |
+| **合計** | **全領域カバー** | **全33メソッド** | **33** |
 
 ### ディレクトリ構造
 
@@ -41,9 +41,11 @@ com.sack-kazu.unity-natural-mcp-extension-tools/
 │   ├── McpSceneManagementToolBuilder.cs
 │   ├── McpProjectSettingsTool.cs # プロジェクト設定管理
 │   ├── McpProjectSettingsToolBuilder.cs
-│   ├── McpToolBase.cs          # 共通基盤クラス (v0.8.1新規)
-│   ├── McpToolUtilities.cs      # 共通ユーティリティ (v0.8.1拡張)
-│   └── ComponentPropertyManager.cs # 型変換・プロパティ設定管理 (v0.8.2新規)
+│   ├── McpToolBase.cs          # 共通基盤クラス
+│   ├── McpToolUtilities.cs      # 共通ユーティリティ
+│   ├── ComponentPropertyManager.cs # 型変換・プロパティ設定管理
+│   ├── ConfigurationModels.cs   # 設定モデル定義
+│   └── McpConfigurationManager.cs # 設定解析・検証管理
 ├── Runtime/                    # ScriptableObjectアセット
 │   ├── McpUnifiedObjectToolBuilder.asset
 │   ├── McpUnifiedAssetToolBuilder.asset
@@ -57,18 +59,18 @@ com.sack-kazu.unity-natural-mcp-extension-tools/
 
 ## 実装パターン
 
-### MCPツールクラスの基本構造 (v0.8.1更新)
+### MCPツールクラスの基本構造
 
 ```csharp
 [McpServerToolType, Description("ツールの説明")]
-internal sealed class McpXxxTool : McpToolBase  // v0.8.1: McpToolBaseを継承
+internal sealed class McpXxxTool : McpToolBase  // McpToolBaseを継承
 {
     [McpServerTool, Description("メソッドの説明")]
     public async ValueTask<string> MethodName(
         [Description("パラメータ説明")] string param1,
         [Description("オプションパラメータ")] string param2 = null)
     {
-        // v0.8.1: ExecuteOperationによる統一されたエラーハンドリング
+        // ExecuteOperationによる統一されたエラーハンドリング
         return await ExecuteOperation(async () =>
         {
             // Prefabモード検証が必要な場合
@@ -104,7 +106,7 @@ Unity Package Manager を使用してこのパッケージをインストール�
 
 ## 技術的詳細
 
-### 共通基盤クラス (v0.8.1新規)
+### 共通基盤クラス
 
 #### McpToolBase
 提供される共通機能：
@@ -115,14 +117,14 @@ Unity Package Manager を使用してこのパッケージをインストール�
 - `GetCurrentPrefabStage/GetContextRoot`: コンテキスト情報取得
 - `LogSuccess/LogWarning`: 統一されたログ出力
 
-#### McpToolUtilities (v0.8.1拡張)
+#### McpToolUtilities
 追加された機能：
 - `CreateSuccessMessage/CreateErrorMessage`: 標準化されたメッセージ生成
 - `GetContextDescription`: コンテキスト説明文生成
 - `ValidateContext`: コンテキスト検証
 - `FindComponent<T>`: ジェネリックコンポーネント検索
 
-#### ComponentPropertyManager (v0.8.2新規)
+#### ComponentPropertyManager
 型変換とプロパティ設定を統一管理：
 - `SetProperty`: コンポーネントのプロパティ/フィールドを自動的に検出して設定
 - `SetNestedProperty`: ドット記法によるネストされたプロパティの設定（例: "material.color"）
@@ -135,12 +137,28 @@ Unity Package Manager を使用してこのパッケージをインストール�
   - Enum型の文字列/数値変換
   - JToken/JArrayからの自動変換
 
+#### ConfigurationModels
+型安全な設定モデル定義：
+- `ParticleSystemConfiguration`: パーティクルシステム設定の構造化
+- `MaterialConfiguration`: マテリアル設定の構造化
+- `ComponentConfiguration`: コンポーネント設定の汎用構造
+- 各プロパティに`DefaultValue`、`Required`、`Range`属性を付与
+- JSON設定の型安全な受け渡しを実現
+
+#### McpConfigurationManager
+設定の解析・検証・管理を統一的に処理：
+- `TryParseConfiguration`: JSON解析と検証を一度に実行
+- `ValidateConfiguration`: Required、Range属性による自動検証
+- `GetDefaultConfiguration`: DefaultValue属性からデフォルト設定を生成
+- `MergeConfigurations`: 部分的な設定とデフォルト設定をマージ
+- `ValidationResult`: 検証結果を構造化して返却
+
 ### 非同期処理
 
 - UniTask を使用してメインスレッドとの同期を管理
 - `await UniTask.SwitchToMainThread()` で Unity API へのアクセスを保証
 
-### エラーハンドリング (v0.8.1更新)
+### エラーハンドリング
 
 - **統一されたエラーハンドリング**: `McpToolBase.ExecuteOperation`メソッドによる一元管理
 - **標準化されたメッセージ生成**: `McpToolUtilities.CreateSuccessMessage/CreateErrorMessage`
@@ -156,12 +174,19 @@ Unity Package Manager を使用してこのパッケージをインストール�
 
 新しいMCPツールを追加する場合：
 
-1. Editor フォルダに新しいツールクラスを作成（**v0.8.1**: `McpToolBase`を継承）
+1. Editor フォルダに新しいツールクラスを作成（`McpToolBase`を継承）
 2. 対応するツールビルダークラスを作成
 3. Runtime フォルダにツールビルダーの ScriptableObject アセットを作成
 4. Unity エディタを再起動してツールを登録
 
-### v0.8.2 推奨実装パターン
+### ベストプラクティス
+
+- **McpToolBaseの継承**: 共通機能を活用し、一貫性のある実装を維持
+- **ExecuteOperationの使用**: エラーハンドリングとログ出力を統一
+- **型安全な設定**: ConfigurationModelsとMcpConfigurationManagerを活用
+- **コンテキスト認識**: Prefabモード/シーンモードを適切に処理
+
+### 推奨実装パターン
 
 ```csharp
 [McpServerToolType, Description("新しいツールの説明")]
@@ -193,47 +218,62 @@ internal sealed class McpNewTool : McpToolBase
 }
 ```
 
-#### コンポーネントプロパティ設定の例 (v0.8.2)
+### 高度な実装例
+
+#### 型安全な設定を使用したパーティクルシステム設定
 
 ```csharp
-// ConfigureComponentメソッドの使用例
-public async ValueTask<string> ConfigureComponent(
+public async ValueTask<string> ConfigureParticleSystem(
     string objectName,
-    string componentType,
-    string properties = null,
+    string configurationJson,
+    bool createNew = false,
+    string particleSystemName = null,
     bool inPrefabMode = false)
 {
     return await ExecuteOperation(async () =>
     {
+        // 型安全な設定の解析と検証
+        if (!McpConfigurationManager.TryParseConfiguration<ParticleSystemConfiguration>(
+            configurationJson, out var config, out var errors))
+        {
+            return McpToolUtilities.CreateErrorMessage(
+                $"Invalid configuration: {string.Join(", ", errors)}");
+        }
+        
         var gameObject = await FindGameObjectSafe(objectName, inPrefabMode);
-        var compType = ComponentPropertyManager.ResolveComponentType(componentType);
+        var particleSystem = gameObject.GetComponent<ParticleSystem>();
         
-        if (compType == null)
+        if (particleSystem == null && createNew)
         {
-            var suggestions = ComponentPropertyManager.GetComponentSuggestions(componentType);
-            var suggestionText = suggestions.Any() ? $" Did you mean: {string.Join(", ", suggestions)}?" : "";
-            return $"Error: Component type '{componentType}' not found.{suggestionText}";
+            particleSystem = gameObject.AddComponent<ParticleSystem>();
+            LogSuccess($"Created new ParticleSystem on {objectName}");
         }
         
-        // プロパティ設定
-        if (!string.IsNullOrEmpty(properties))
-        {
-            var propsDict = JsonConvert.DeserializeObject<Dictionary<string, object>>(properties);
-            foreach (var prop in propsDict)
-            {
-                var result = prop.Key.Contains(".")
-                    ? ComponentPropertyManager.SetNestedProperty(component, prop.Key, prop.Value, inPrefabMode)
-                    : ComponentPropertyManager.SetProperty(component, prop.Key, prop.Value, inPrefabMode);
-                
-                // エラーハンドリング
-                if (!result.Success)
-                {
-                    errors.Add($"{prop.Key}: {result.ErrorMessage}");
-                }
-            }
-        }
+        // 設定の適用
+        ApplyParticleSystemConfiguration(particleSystem, config);
         
-        return McpToolUtilities.CreateSuccessMessage("Component configured", objectName);
-    }, "ConfigureComponent", inPrefabMode);
+        EditorUtility.SetDirty(particleSystem);
+        MarkSceneDirty(inPrefabMode);
+        
+        return McpToolUtilities.CreateSuccessMessage(
+            "Particle system configured", objectName);
+    }, "ConfigureParticleSystem", inPrefabMode);
+}
+```
+
+#### ComponentPropertyManagerを使用したプロパティ設定
+
+```csharp
+// ネストされたプロパティの設定例
+var result = ComponentPropertyManager.SetNestedProperty(
+    renderer, 
+    "material.color",
+    new float[] { 1.0f, 0.5f, 0.0f, 1.0f },
+    inPrefabMode
+);
+
+if (!result.Success)
+{
+    return McpToolUtilities.CreateErrorMessage(result.ErrorMessage);
 }
 ```
