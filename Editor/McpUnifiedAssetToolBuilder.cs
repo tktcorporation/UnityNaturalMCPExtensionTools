@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityNaturalMCP.Editor;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Editor.McpTools
+namespace UnityNaturalMCPExtension.Editor
 {
     /// <summary>
     /// Builder for the unified asset management MCP tool

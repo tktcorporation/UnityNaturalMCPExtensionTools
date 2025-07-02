@@ -73,3 +73,6 @@ crashlytics-build.properties
 .vsconfig
 Assets/BuildReports
 Assets/BuildReports.meta
+
+.mcp.json
+.claude/**/*local*
