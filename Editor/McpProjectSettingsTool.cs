@@ -12,7 +12,7 @@ namespace UnityNaturalMCPExtension.Editor
     /// MCP tool for Unity project settings management (layers, tags, etc.)
     /// </summary>
     [McpServerToolType, Description("Unity project settings management tools")]
-    internal sealed class McpProjectSettingsTool
+    internal sealed class McpProjectSettingsTool : McpToolBase
     {
         [McpServerTool, Description("Manage project layers (list, set names, remove names)")]
         public async ValueTask<string> ManageProjectLayers(
@@ -23,9 +23,8 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("For setlayername: New layer name (optional)")]
             string layerName = null)
         {
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
 
                 switch (operation?.ToLower())
                 {
@@ -51,49 +50,44 @@ namespace UnityNaturalMCPExtension.Editor
 
                     case "setlayername":
                         if (!layerIndex.HasValue)
-                            return "Error: layerIndex is required for setlayername operation";
+                            return McpToolUtilities.CreateErrorMessage("layerIndex is required for setlayername operation");
                         
                         if (!IsEditableLayer(layerIndex.Value))
-                            return $"Error: Layer {layerIndex.Value} is not editable. Only layers 8-31 can be modified";
+                            return McpToolUtilities.CreateErrorMessage($"Layer {layerIndex.Value} is not editable. Only layers 8-31 can be modified");
                         
                         if (string.IsNullOrEmpty(layerName))
-                            return "Error: layerName is required for setlayername operation";
+                            return McpToolUtilities.CreateErrorMessage("layerName is required for setlayername operation");
                         
                         // Check if layer name already exists
                         for (int i = 0; i < 32; i++)
                         {
                             if (i != layerIndex.Value && LayerMask.LayerToName(i) == layerName)
-                                return $"Error: Layer name '{layerName}' already exists on layer {i}";
+                                return McpToolUtilities.CreateErrorMessage($"Layer name '{layerName}' already exists on layer {i}");
                         }
                         
                         var result = SetProjectLayerName(layerIndex.Value, layerName);
-                        return result ? $"Successfully set layer {layerIndex.Value} name to '{layerName}'" 
-                                     : $"Error: Failed to set layer {layerIndex.Value} name to '{layerName}'";
+                        return result ? McpToolUtilities.CreateSuccessMessage($"Set layer {layerIndex.Value} name to '{layerName}'") 
+                                     : McpToolUtilities.CreateErrorMessage($"Failed to set layer {layerIndex.Value} name to '{layerName}'");
 
                     case "removelayername":
                         if (!layerIndex.HasValue)
-                            return "Error: layerIndex is required for removelayername operation";
+                            return McpToolUtilities.CreateErrorMessage("layerIndex is required for removelayername operation");
                         
                         if (!IsEditableLayer(layerIndex.Value))
-                            return $"Error: Layer {layerIndex.Value} is not editable. Only layers 8-31 can be modified";
+                            return McpToolUtilities.CreateErrorMessage($"Layer {layerIndex.Value} is not editable. Only layers 8-31 can be modified");
                         
                         var oldLayerName = LayerMask.LayerToName(layerIndex.Value);
                         if (string.IsNullOrEmpty(oldLayerName))
                             return $"Layer {layerIndex.Value} already has no name";
                         
                         var removeResult = SetProjectLayerName(layerIndex.Value, "");
-                        return removeResult ? $"Successfully removed layer name from layer {layerIndex.Value} (was '{oldLayerName}')" 
-                                           : $"Error: Failed to remove layer name from layer {layerIndex.Value}";
+                        return removeResult ? McpToolUtilities.CreateSuccessMessage($"Removed layer name from layer {layerIndex.Value} (was '{oldLayerName}')") 
+                                           : McpToolUtilities.CreateErrorMessage($"Failed to remove layer name from layer {layerIndex.Value}");
 
                     default:
-                        return "Error: operation must be 'listlayers', 'setlayername', or 'removelayername'";
+                        return McpToolUtilities.CreateErrorMessage("operation must be 'listlayers', 'setlayername', or 'removelayername'");
                 }
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error managing project layers: {e}");
-                return $"Error managing project layers: {e.Message}";
-            }
+            }, "managing project layers");
         }
 
         // Helper methods for layer management
@@ -137,7 +131,7 @@ namespace UnityNaturalMCPExtension.Editor
                     // Force refresh of layer names
                     AssetDatabase.Refresh();
                     
-                    Debug.Log($"Set layer {layerIndex} name to '{layerName}'");
+                    LogSuccess($"Set layer {layerIndex} name to '{layerName}'");
                     return true;
                 }
                 else

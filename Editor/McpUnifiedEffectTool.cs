@@ -15,7 +15,7 @@ namespace UnityNaturalMCPExtension.Editor
     /// Unified MCP tool for particle system management in Unity
     /// </summary>
     [McpServerToolType, Description("Unified particle system management tools for Unity")]
-    internal sealed class McpUnifiedEffectTool
+    internal sealed class McpUnifiedEffectTool : McpToolBase
     {
         [McpServerTool, Description("Configure particle system with comprehensive settings")]
         public async ValueTask<string> ConfigureParticleSystem(
@@ -36,24 +36,11 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Configure in Prefab mode context instead of scene (optional, default: false)")]
             bool inPrefabMode = false)
         {
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
+                await ValidatePrefabMode(inPrefabMode);
 
-                // Check if we're in Prefab mode when requested
-                if (inPrefabMode)
-                {
-                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
-                    if (prefabStage == null)
-                        return "Error: Prefab mode is not active. Please open a prefab first.";
-                }
-
-                // Find the GameObject using the appropriate method
-                GameObject gameObject = McpToolUtilities.FindGameObject(objectName, inPrefabMode);
-                
-                if (gameObject == null)
-                    return $"Error: GameObject '{objectName}' not found{(inPrefabMode ? " in Prefab mode" : " in scene")}";
-
+                var gameObject = await FindGameObjectSafe(objectName, inPrefabMode);
                 var particleSystem = FindParticleSystem(objectName, inPrefabMode);
 
                 if (particleSystem == null && createNew)
@@ -281,6 +268,7 @@ namespace UnityNaturalMCPExtension.Editor
                 }
 
                 EditorUtility.SetDirty(particleSystem);
+                MarkSceneDirty(inPrefabMode);
 
                 // Restart particle system if it was playing
                 if (wasPlaying)
@@ -290,16 +278,11 @@ namespace UnityNaturalMCPExtension.Editor
 
                 if (changes.Count == 0)
                     return createNew
-                        ? $"Created ParticleSystem on '{objectName}' with default settings"
-                        : $"No changes applied to ParticleSystem on '{objectName}'";
+                        ? McpToolUtilities.CreateSuccessMessage($"Created ParticleSystem on '{objectName}' with default settings")
+                        : McpToolUtilities.CreateSuccessMessage($"No changes applied to ParticleSystem on '{objectName}'");
 
-                return $"Successfully configured ParticleSystem on '{objectName}': {string.Join(", ", changes)}";
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error configuring particle system: {e}");
-                return $"Error configuring particle system: {e.Message}";
-            }
+                return McpToolUtilities.CreateSuccessMessage($"Configured ParticleSystem on '{objectName}': {string.Join(", ", changes)}");
+            }, "configuring particle system");
         }
 
         [McpServerTool, Description("Control particle system playback")]
@@ -311,41 +294,28 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Control in Prefab mode context instead of scene (optional, default: false)")]
             bool inPrefabMode = false)
         {
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
-
-                // Check if we're in Prefab mode when requested
-                if (inPrefabMode)
-                {
-                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
-                    if (prefabStage == null)
-                        return "Error: Prefab mode is not active. Please open a prefab first.";
-                }
+                await ValidatePrefabMode(inPrefabMode);
 
                 var particleSystem = FindParticleSystem(objectName, inPrefabMode);
                 if (particleSystem == null)
-                    return $"Error: No ParticleSystem found on GameObject '{objectName}'{(inPrefabMode ? " in Prefab mode" : " in scene")}";
+                    return McpToolUtilities.CreateErrorMessage($"No ParticleSystem found on GameObject '{objectName}'{McpToolUtilities.GetContextDescription(inPrefabMode)}");
 
                 switch (action?.ToLower())
                 {
                     case "play":
                         particleSystem.Play();
-                        return $"Successfully started ParticleSystem on '{objectName}'";
+                        return McpToolUtilities.CreateSuccessMessage($"Started ParticleSystem on '{objectName}'");
 
                     case "stop":
                         particleSystem.Stop();
-                        return $"Successfully stopped ParticleSystem on '{objectName}'";
+                        return McpToolUtilities.CreateSuccessMessage($"Stopped ParticleSystem on '{objectName}'");
 
                     default:
-                        return "Error: action must be 'play' or 'stop'";
+                        return McpToolUtilities.CreateErrorMessage("action must be 'play' or 'stop'");
                 }
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error controlling particle system: {e}");
-                return $"Error controlling particle system: {e.Message}";
-            }
+            }, "controlling particle system");
         }
 
         [McpServerTool, Description("Get detailed information about a particle system")]
@@ -357,21 +327,13 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Get info from Prefab mode context instead of scene (optional, default: false)")]
             bool inPrefabMode = false)
         {
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
-
-                // Check if we're in Prefab mode when requested
-                if (inPrefabMode)
-                {
-                    var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
-                    if (prefabStage == null)
-                        return "Error: Prefab mode is not active. Please open a prefab first.";
-                }
+                await ValidatePrefabMode(inPrefabMode);
 
                 var particleSystem = FindParticleSystem(objectName, inPrefabMode);
                 if (particleSystem == null)
-                    return $"Error: No ParticleSystem found on GameObject '{objectName}'{(inPrefabMode ? " in Prefab mode" : " in scene")}";
+                    return McpToolUtilities.CreateErrorMessage($"No ParticleSystem found on GameObject '{objectName}'{McpToolUtilities.GetContextDescription(inPrefabMode)}");
 
                 var info = new Dictionary<string, object>();
                 info["objectName"] = objectName;
@@ -703,12 +665,7 @@ namespace UnityNaturalMCPExtension.Editor
                 }
 
                 return JsonConvert.SerializeObject(info, Formatting.Indented);
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error getting particle system info: {e}");
-                return $"Error getting particle system info: {e.Message}";
-            }
+            }, "getting particle system info");
         }
 
         private object GetMinMaxCurveValue(ParticleSystem.MinMaxCurve curve)

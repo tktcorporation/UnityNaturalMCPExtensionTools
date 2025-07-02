@@ -240,7 +240,17 @@ namespace UnityNaturalMCPExtension.Editor
         }
 
         /// <summary>
-        /// Creates a standardized error message
+        /// Creates a standardized error message (simple version)
+        /// </summary>
+        /// <param name="message">The error message</param>
+        /// <returns>Formatted error message</returns>
+        public static string CreateErrorMessage(string message)
+        {
+            return $"Error: {message}";
+        }
+
+        /// <summary>
+        /// Creates a standardized error message (detailed version)
         /// </summary>
         /// <param name="operation">The operation that failed</param>
         /// <param name="reason">The reason for failure</param>

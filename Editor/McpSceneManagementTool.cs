@@ -16,7 +16,7 @@ namespace UnityNaturalMCPExtension.Editor
     /// MCP tool for Unity Scene creation and management
     /// </summary>
     [McpServerToolType, Description("Unity Scene creation and management tools")]
-    internal sealed class McpSceneManagementTool
+    internal sealed class McpSceneManagementTool : McpToolBase
     {
         [McpServerTool, Description("Create a new Unity Scene")]
         public async ValueTask<string> CreateScene(
@@ -27,12 +27,10 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Scene template: 'Empty', '3D', '2D', 'UI' (optional, defaults to 'Empty')")]
             string template = "Empty")
         {
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
-
                 if (string.IsNullOrEmpty(sceneName))
-                    return "Error: sceneName is required";
+                    return McpToolUtilities.CreateErrorMessage("sceneName is required");
 
                 // Validate and set default path
                 if (string.IsNullOrEmpty(scenePath))
@@ -53,24 +51,19 @@ namespace UnityNaturalMCPExtension.Editor
                 // Create new scene based on template
                 var newScene = CreateSceneByTemplate(template);
                 if (!newScene.IsValid())
-                    return $"Error: Failed to create scene with template '{template}'";
+                    return McpToolUtilities.CreateErrorMessage($"Failed to create scene with template '{template}'");
 
                 // Save the scene
                 var sceneFilePath = scenePath + sceneName + ".unity";
                 bool saved = EditorSceneManager.SaveScene(newScene, sceneFilePath);
 
                 if (!saved)
-                    return $"Error: Failed to save scene to '{sceneFilePath}'";
+                    return McpToolUtilities.CreateErrorMessage($"Failed to save scene to '{sceneFilePath}'");
 
                 AssetDatabase.Refresh();
 
-                return $"Successfully created scene '{sceneName}' at '{sceneFilePath}' using template '{template}'";
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error creating scene: {e}");
-                return $"Error creating scene: {e.Message}";
-            }
+                return McpToolUtilities.CreateSuccessMessage($"Created scene '{sceneName}' at '{sceneFilePath}' using template '{template}'");
+            }, "creating scene");
         }
 
         [McpServerTool, Description("Save the current scene or save as")]
@@ -80,13 +73,11 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Directory path to save the scene (optional, uses current scene path if not provided)")]
             string scenePath = null)
         {
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
-
                 var activeScene = EditorSceneManager.GetActiveScene();
                 if (!activeScene.IsValid())
-                    return "Error: No active scene to save";
+                    return McpToolUtilities.CreateErrorMessage("No active scene to save");
 
                 bool isSaveAs = !string.IsNullOrEmpty(sceneName) || !string.IsNullOrEmpty(scenePath);
 
@@ -117,29 +108,24 @@ namespace UnityNaturalMCPExtension.Editor
                     bool saved = EditorSceneManager.SaveScene(activeScene, newScenePath);
 
                     if (!saved)
-                        return $"Error: Failed to save scene as '{newScenePath}'";
+                        return McpToolUtilities.CreateErrorMessage($"Failed to save scene as '{newScenePath}'");
 
                     AssetDatabase.Refresh();
-                    return $"Successfully saved scene as '{newName}' at '{newScenePath}'";
+                    return McpToolUtilities.CreateSuccessMessage($"Saved scene as '{newName}' at '{newScenePath}'");
                 }
                 else
                 {
                     // Regular save operation
                     if (string.IsNullOrEmpty(activeScene.path))
-                        return "Error: Scene has no path. Use sceneName parameter to save as new scene";
+                        return McpToolUtilities.CreateErrorMessage("Scene has no path. Use sceneName parameter to save as new scene");
 
                     bool saved = EditorSceneManager.SaveScene(activeScene);
                     if (!saved)
-                        return $"Error: Failed to save scene '{activeScene.name}'";
+                        return McpToolUtilities.CreateErrorMessage($"Failed to save scene '{activeScene.name}'");
 
-                    return $"Successfully saved scene '{activeScene.name}' at '{activeScene.path}'";
+                    return McpToolUtilities.CreateSuccessMessage($"Saved scene '{activeScene.name}' at '{activeScene.path}'");
                 }
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error saving scene: {e}");
-                return $"Error saving scene: {e.Message}";
-            }
+            }, "saving scene");
         }
 
         [McpServerTool, Description("Load an existing scene")]
@@ -149,16 +135,14 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Load mode: 'Single' or 'Additive' (optional, defaults to 'Single')")]
             string loadMode = "Single")
         {
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
-
                 if (string.IsNullOrEmpty(sceneName))
-                    return "Error: sceneName is required";
+                    return McpToolUtilities.CreateErrorMessage("sceneName is required");
 
                 // Parse load mode
                 if (!Enum.TryParse<OpenSceneMode>(loadMode, true, out var mode))
-                    return $"Error: Invalid load mode '{loadMode}'. Valid modes: Single, Additive";
+                    return McpToolUtilities.CreateErrorMessage($"Invalid load mode '{loadMode}'. Valid modes: Single, Additive");
 
                 // Check if current scene has unsaved changes
                 if (EditorSceneManager.GetActiveScene().isDirty)
@@ -177,20 +161,15 @@ namespace UnityNaturalMCPExtension.Editor
                 // Find scene path
                 string scenePath = FindScenePath(sceneName);
                 if (string.IsNullOrEmpty(scenePath))
-                    return $"Error: Scene '{sceneName}' not found in project";
+                    return McpToolUtilities.CreateErrorMessage($"Scene '{sceneName}' not found in project");
 
                 // Load scene
                 var scene = EditorSceneManager.OpenScene(scenePath, mode);
                 if (!scene.IsValid())
-                    return $"Error: Failed to load scene '{sceneName}'";
+                    return McpToolUtilities.CreateErrorMessage($"Failed to load scene '{sceneName}'");
 
-                return $"Successfully loaded scene '{scene.name}' from '{scenePath}' in {loadMode} mode";
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error loading scene: {e}");
-                return $"Error loading scene: {e.Message}";
-            }
+                return McpToolUtilities.CreateSuccessMessage($"Loaded scene '{scene.name}' from '{scenePath}' in {loadMode} mode");
+            }, "loading scene");
         }
 
         [McpServerTool, Description("List all scenes in the project")]
@@ -198,9 +177,8 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Filter scenes by name (optional)")]
             string nameFilter = null)
         {
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
 
                 var sceneGuids = AssetDatabase.FindAssets("t:Scene");
                 var scenes = new List<string>();
@@ -233,24 +211,17 @@ namespace UnityNaturalMCPExtension.Editor
                 result += ":\n" + string.Join("\n", scenes.OrderBy(s => s));
 
                 return result;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error listing scenes: {e}");
-                return $"Error listing scenes: {e.Message}";
-            }
+            }, "listing scenes");
         }
 
         [McpServerTool, Description("Get information about the active scene")]
         public async ValueTask<string> GetActiveSceneInfo()
         {
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
-
                 var activeScene = EditorSceneManager.GetActiveScene();
                 if (!activeScene.IsValid())
-                    return "Error: No active scene";
+                    return McpToolUtilities.CreateErrorMessage("No active scene");
 
                 var info = new System.Text.StringBuilder();
                 info.AppendLine($"Scene Name: {activeScene.name}");
@@ -285,12 +256,7 @@ namespace UnityNaturalMCPExtension.Editor
                 }
 
                 return info.ToString();
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error getting scene info: {e}");
-                return $"Error getting scene info: {e.Message}";
-            }
+            }, "getting scene info");
         }
 
         [McpServerTool, Description("Close a scene (useful in multi-scene setups)")]
@@ -300,12 +266,10 @@ namespace UnityNaturalMCPExtension.Editor
             [Description("Remove the scene from hierarchy (optional, defaults to true)")]
             bool removeScene = true)
         {
-            try
+            return await ExecuteOperation(async () =>
             {
-                await UniTask.SwitchToMainThread();
-
                 if (string.IsNullOrEmpty(sceneName))
-                    return "Error: sceneName is required";
+                    return McpToolUtilities.CreateErrorMessage("sceneName is required");
 
                 // Find the scene
                 UnityEngine.SceneManagement.Scene sceneToClose = default;
@@ -323,11 +287,11 @@ namespace UnityNaturalMCPExtension.Editor
                 }
 
                 if (!found)
-                    return $"Error: Scene '{sceneName}' not found in currently loaded scenes";
+                    return McpToolUtilities.CreateErrorMessage($"Scene '{sceneName}' not found in currently loaded scenes");
 
                 // Check if it's the only scene
                 if (EditorSceneManager.sceneCount == 1)
-                    return "Error: Cannot close the only loaded scene";
+                    return McpToolUtilities.CreateErrorMessage("Cannot close the only loaded scene");
 
                 // Check if scene has unsaved changes
                 if (sceneToClose.isDirty)
@@ -346,16 +310,11 @@ namespace UnityNaturalMCPExtension.Editor
                 // Close the scene
                 bool closed = EditorSceneManager.CloseScene(sceneToClose, removeScene);
                 if (!closed)
-                    return $"Error: Failed to close scene '{sceneName}'";
+                    return McpToolUtilities.CreateErrorMessage($"Failed to close scene '{sceneName}'");
 
                 var action = removeScene ? "closed and removed" : "closed";
-                return $"Successfully {action} scene '{sceneName}'";
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error closing scene: {e}");
-                return $"Error closing scene: {e.Message}";
-            }
+                return McpToolUtilities.CreateSuccessMessage($"{action} scene '{sceneName}'");
+            }, "closing scene");
         }
 
         private UnityEngine.SceneManagement.Scene CreateSceneByTemplate(string template)

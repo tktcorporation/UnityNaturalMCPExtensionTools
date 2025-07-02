@@ -43,6 +43,26 @@ namespace UnityNaturalMCPExtension.Editor
         }
 
         /// <summary>
+        /// Executes an operation with standard error handling
+        /// </summary>
+        /// <param name="operation">The operation to execute</param>
+        /// <param name="operationName">Name of the operation for error messages</param>
+        /// <returns>Result string from the operation</returns>
+        protected async ValueTask<string> ExecuteOperation(Func<ValueTask<string>> operation, string operationName)
+        {
+            try
+            {
+                await UniTask.SwitchToMainThread();
+                return await operation();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"{GetType().Name} - Error {operationName}: {e}");
+                return McpToolUtilities.CreateErrorMessage($"{operationName}: {e.Message}");
+            }
+        }
+
+        /// <summary>
         /// Validates prefab mode state and returns appropriate error if invalid
         /// </summary>
         /// <param name="inPrefabMode">Whether operation should be in prefab mode</param>
