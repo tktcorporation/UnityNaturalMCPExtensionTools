@@ -37,11 +37,9 @@ namespace UnityNaturalMCPExtension.Editor
         
         public float[] startColor { get; set; } = { 1.0f, 1.0f, 1.0f, 1.0f };
         
-        [Range(0f, 360f)]
         [DefaultValue(0f)]
         public float startRotation { get; set; } = 0f;
         
-        [Range(0f, 1f)]
         [DefaultValue(0f)]
         public float gravityModifier { get; set; } = 0f;
         
@@ -148,11 +146,9 @@ namespace UnityNaturalMCPExtension.Editor
         
         public float[] baseColor { get; set; } = { 1f, 1f, 1f, 1f };
         
-        [Range(0f, 1f)]
         [DefaultValue(0f)]
         public float metallic { get; set; } = 0f;
         
-        [Range(0f, 1f)]
         [DefaultValue(0.5f)]
         public float smoothness { get; set; } = 0.5f;
         

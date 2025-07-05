@@ -714,7 +714,7 @@ namespace UnityNaturalMCPExtension.Editor
                 typeof(ScriptableObject),
                 typeof(AnimationClip),
                 typeof(AnimatorController),
-                typeof(PhysicsMaterial),
+                typeof(PhysicMaterial),
                 typeof(PhysicsMaterial2D)
             };
 
@@ -798,7 +798,7 @@ namespace UnityNaturalMCPExtension.Editor
                 { typeof(Shader), "Shader" },
                 { typeof(AnimationClip), "AnimationClip" },
                 { typeof(AnimatorController), "AnimatorController" },
-                { typeof(PhysicsMaterial), "PhysicsMaterial" },
+                { typeof(PhysicMaterial), "PhysicMaterial" },
                 { typeof(PhysicsMaterial2D), "PhysicsMaterial2D" },
                 { typeof(GameObject), "Prefab" } // For Prefab assets
             };
